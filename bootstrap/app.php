@@ -18,10 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
+            'auth' => \App\Http\Middleware\Authenticate::class, // 👈 اینو اضافه کن
         ]);
 
         //
     })
+
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();
