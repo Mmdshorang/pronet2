@@ -8,25 +8,147 @@ use Illuminate\Auth\AuthenticationException;
 
 class CompanyController extends Controller
 {
-    // دریافت کمپانی‌ها برای کاربر وارد شده
-    public function getCompanies(Request $request)
+
+    public function index(Request $request)
     {
-        // چک کردن اینکه آیا کاربر احراز هویت شده است یا خیر
-        if (!Auth::check()) {
-            // ارسال خطای 401 در صورت نبود توکن
-            throw new AuthenticationException('Unauthenticated.');
+        $query = Company::with('location');
+
+        if ($request->has('name')) {
+            $query->where('name', 'like', "%{$request->name}%");
         }
 
-        // اطمینان از احراز هویت کاربر
-        $user = $request->user(); // این متد به طور خودکار کاربر وارد شده را دریافت می‌کند
+        if ($request->has('city')) {
+            $query->whereHas('location', function ($q) use ($request) {
+                $q->where('city', 'like', "%{$request->city}%");
+            });
+        }
 
-        // دریافت کمپانی‌های مرتبط با کاربر
-        $companies = $user->companies; // فرض بر این است که رابطه‌ی many-to-many با شرکت‌ها در مدل User تعریف شده است
-
-        return response()->json([
-            'message' => 'Companies retrieved successfully!',
-            'companies' => $companies,
-        ]);
+        return response()->json($query->paginate(10));
     }
+
+    public function show($id)
+    {
+        $company = Company::with(['location', 'users', 'ratings.reviewer'])->findOrFail($id);
+        return response()->json($company);
+    }
+
+    public function employees($id)
+    {
+        $company = Company::findOrFail($id);
+        $employees = $company->users()->with(['skills', 'achievements', 'location'])->get();
+        return response()->json($employees);
+    }
+    // موجود است
+    // - اضافه می‌کنیم:
+// public function show($id)
+// {
+//     $company = Company::with(['users', 'ratings'])->findOrFail($id);
+//     return response()->json($company);
+// }
+
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|email|unique:companies',
+        'password' => 'required|string|min:6',
+        'location_id' => 'required|exists:locations,id',
+        'logo' => 'nullable|string',
+        'description' => 'nullable|string',
+    ]);
+    $validated['password'] = bcrypt($validated['password']);
+    $company = Company::create($validated);
+    return response()->json($company, 201);
+}
+
+public function update(Request $request, $id)
+{
+    $company = Company::findOrFail($id);
+    $company->update($request->only(['name', 'email', 'location_id', 'logo', 'description']));
+    return response()->json($company);
+}
+
+public function destroy($id)
+{
+    $company = Company::findOrFail($id);
+    $company->delete();
+    return response()->json(['message' => 'Company deleted']);
+}
+
+    // دریافت کمپانی‌ها برای کاربر وارد شده
+    // public function index(Request $request)
+    // {
+    //     $user = $request->user();
+    //     $companies = $user->companies;
+
+    //     return response()->json([
+    //         'message' => 'Companies retrieved successfully!',
+    //         'companies' => $companies,
+    //     ]);
+    // }
+//   public function show(Request $request, $id)
+//     {
+//         $user = $request->user();
+
+//         $company = $user->companies()->where('id', $id)->first();
+
+//         if (!$company) {
+//             return response()->json([
+//                 'message' => 'Company not found.',
+//             ], 404);
+//         }
+
+//         return response()->json([
+//             'message' => 'Company retrieved successfully!',
+//             'company' => $company,
+//         ]);
+//     }
+    // public function update(Request $request, $id)
+    // {
+    //     $request->validate([
+    //         'name' => 'required|string|max:255',
+    //     ]);
+
+    //     $user = $request->user();
+    //     $company = $user->companies()->where('id', $id)->first();
+
+    //     if (!$company) {
+    //         return response()->json([
+    //             'message' => 'Company not found or unauthorized.',
+    //         ], 404);
+    //     }
+
+    //     $company->update([
+    //         'name' => $request->name,
+    //     ]);
+
+    //     return response()->json([
+    //         'message' => 'Company updated successfully!',
+    //         'company' => $company,
+    //     ]);
+    // }
+    // public function destroy(Request $request, $id)
+    // {
+    //     $user = $request->user();
+    //     $company = $user->companies()->where('id', $id)->first();
+
+    //     if (!$company) {
+    //         return response()->json([
+    //             'message' => 'Company not found or unauthorized.',
+    //         ], 404);
+    //     }
+
+    //     // ابتدا اتصال را حذف می‌کنیم
+    //     $user->companies()->detach($company->id);
+
+    //     // سپس شرکت را حذف می‌کنیم (در صورت نیاز)
+    //     $company->delete();
+
+    //     return response()->json([
+    //         'message' => 'Company deleted successfully!',
+    //     ]);
+    // }
+
+
 }
 
