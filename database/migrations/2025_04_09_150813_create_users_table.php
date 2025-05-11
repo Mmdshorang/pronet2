@@ -19,6 +19,10 @@ return new class extends Migration
             $table->string('password');
             $table->string('role')->default('user'); // اضافه شده
             $table->foreignId('location_id')->nullable()->constrained('locations')->nullOnDelete(); // اضافه شده
+            $table->text('bio')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('linkedin_url')->nullable();
+            $table->string('github_url')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

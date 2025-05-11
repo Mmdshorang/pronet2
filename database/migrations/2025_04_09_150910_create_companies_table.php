@@ -16,6 +16,9 @@ class CreateCompaniesTable extends Migration
             $table->unsignedBigInteger('location_id')->nullable();
             $table->string('logo')->nullable();
             $table->text('description')->nullable();
+            $table->string('industry')->nullable();
+            $table->string('website')->nullable();
+            $table->string('phone')->nullable();
             $table->timestamps();
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('set null');
