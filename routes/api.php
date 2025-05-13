@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\UserController;
 
@@ -61,8 +61,8 @@ Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
 
 Route::get('/users/search', [UserController::class, 'search']);
 Route::get('/users/{user}', [UserController::class, 'show']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [App\Http\Controllers\Auth\AuthController::class, 'login']);
+Route::post('/register', [App\Http\Controllers\Auth\AuthController::class, 'register']);
 
 
 
@@ -85,7 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/user/password', [UserController::class, 'changePassword']);
 
     // خروج از حساب کاربری
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/logout', [App\Http\Controllers\Auth\AuthController::class, 'logout']);
 });
 
 // (اختیاری) لیست کاربران - اگر فقط ادمین‌ها باید دسترسی داشته باشند، middleware اضافه کن

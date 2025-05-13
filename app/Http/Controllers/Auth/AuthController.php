@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
+use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
@@ -18,8 +18,7 @@ class AuthController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users',
                 'password' => 'required|string|min:6|confirmed',
-                'role' => 'nullable|string|in:user,company',
-                'location_id' => 'nullable|exists:locations,id'
+                'location' => 'nullable|string|max:255'
             ]);
 
             if ($validator->fails()) {
@@ -34,8 +33,8 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role' => $request->input('role', 'user'),
-                'location_id' => $request->input('location_id'),
+                'role' => 'user', // نقش ثابت
+                'location' => $request->location,
                 'email_verified_at' => now()
             ]);
 
@@ -50,7 +49,7 @@ class AuthController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
-                        'location_id' => $user->location_id
+                        'location' => $user->location
                     ],
                     'token' => $token
                 ]
@@ -102,7 +101,7 @@ class AuthController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
-                        'location_id' => $user->location_id
+                        'location' => $user->location
                     ],
                     'token' => $token
                 ]
@@ -121,7 +120,7 @@ class AuthController extends Controller
     {
         try {
             $request->user()->currentAccessToken()->delete();
-            
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Logged out successfully'
@@ -134,4 +133,4 @@ class AuthController extends Controller
             ], 500);
         }
     }
-}
+} 
