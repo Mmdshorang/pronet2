@@ -18,7 +18,7 @@ class AuthController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users',
                 'password' => 'required|string|min:6|confirmed',
-                'location' => 'nullable|string|max:255'
+                'location_id' => 'nullable|exists:locations,id'
             ]);
 
             if ($validator->fails()) {
@@ -33,24 +33,27 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role' => 'user', // نقش ثابت
-                'location' => $request->location,
+                'role' => 'user',
+                'location_id' => $request->location_id,
                 'email_verified_at' => now()
             ]);
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
+            // بارگذاری ارتباطات
+            $user->load([
+                'skills',
+                'achievements',
+                'companies',
+                'location',
+                'receivedRatings.reviewer'
+            ]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'User registered successfully',
                 'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->role,
-                        'location' => $user->location
-                    ],
+                    'user' => $user,
                     'token' => $token
                 ]
             ], 201);
@@ -63,6 +66,7 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
 
     // ورود کاربر
     public function login(Request $request)
@@ -81,13 +85,19 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user = User::where('email', $request->email)->first();
+            $user = User::with([
+                'skills',
+                'achievements',
+                'receivedRatings',
+                'companies',
+                'location'
+            ])->where('email', $request->email)->first();
 
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Invalid credentials'
-                ], 401);
+                    'message' => 'ایمیل یا رمز عبور نادرست است'
+                ], 200);
             }
 
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -101,12 +111,19 @@ class AuthController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
+                        'location_id' => $user->location_id,
+                        'email_verified_at' => $user->email_verified_at,
+                        'created_at' => $user->created_at,
+                        'updated_at' => $user->updated_at,
+                        'skills' => $user->skills,
+                        'achievements' => $user->achievements,
+                        'receivedRatings' => $user->receivedRatings,
+                        'companies' => $user->companies,
                         'location' => $user->location
                     ],
                     'token' => $token
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -115,6 +132,7 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
 
     public function logout(Request $request)
     {
@@ -133,4 +151,4 @@ class AuthController extends Controller
             ], 500);
         }
     }
-} 
+}

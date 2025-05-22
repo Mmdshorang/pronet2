@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Achievement;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class AchievementSeeder extends Seeder
@@ -72,8 +73,23 @@ class AchievementSeeder extends Seeder
             ],
         ];
 
-        foreach ($achievements as $achievement) {
-            Achievement::create($achievement);
+        // Get all users
+        $users = User::all();
+
+        // Assign achievements to users
+        foreach ($achievements as $achievementData) {
+            // Randomly select 1-2 users for each achievement
+            $randomUsers = $users->random(rand(1, 2));
+            
+            foreach ($randomUsers as $user) {
+                Achievement::create([
+                    'title' => $achievementData['title'],
+                    'description' => $achievementData['description'],
+                    'date' => $achievementData['date'],
+                    'issuer' => $achievementData['issuer'],
+                    'user_id' => $user->id
+                ]);
+            }
         }
     }
 } 

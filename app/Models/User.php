@@ -15,7 +15,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'location',
+        'location_id',
+        
         'email_verified_at',
         'remember_token',
     ];
@@ -58,5 +59,10 @@ class User extends Authenticatable
     public function givenCompanyRatings()
     {
         return $this->hasMany(CompanyRating::class, 'reviewer_id');
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class);
     }
 }

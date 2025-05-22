@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Skill;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class SkillSeeder extends Seeder
@@ -42,8 +43,21 @@ class SkillSeeder extends Seeder
             ['name' => 'REST API', 'category' => 'API'],
         ];
 
-        foreach ($skills as $skill) {
-            Skill::create($skill);
+        // Get all users
+        $users = User::all();
+
+        // Assign skills to users
+        foreach ($skills as $skillData) {
+            // Randomly select 1-3 users for each skill
+            $randomUsers = $users->random(rand(1, 3));
+            
+            foreach ($randomUsers as $user) {
+                Skill::create([
+                    'name' => $skillData['name'],
+                    'category' => $skillData['category'],
+                    'user_id' => $user->id
+                ]);
+            }
         }
     }
 } 
