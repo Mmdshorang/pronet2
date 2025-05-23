@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\UserRating;
+use App\Models\RatingCriteria;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class UserRatingController extends Controller
 {
@@ -10,16 +13,36 @@ class UserRatingController extends Controller
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'professional_capabilities' => 'required|integer|min:1|max:5',
-            'teamwork' => 'required|integer|min:1|max:5',
-            'ethics_and_relations' => 'required|integer|min:1|max:5',
-            'punctuality' => 'required|integer|min:1|max:5',
-            'behavior' => 'required|integer|min:1|max:5',
+            'criteria' => 'required|array|min:1',
+            'criteria.*.id' => 'required|exists:rating_criterias,id',
+            'criteria.*.score' => 'required|integer|min:1|max:5',
+            'criteria.*.comment' => 'nullable|string',
             'comment' => 'nullable|string',
         ]);
 
-        $validated['reviewer_id'] = $request->user()->id;
-        $rating = UserRating::create($validated);
-        return response()->json($rating, 201);
+        $reviewerId = $request->user()->id;
+
+        return DB::transaction(function () use ($validated, $reviewerId) {
+            // محاسبه میانگین نمرات برای overall_rating
+            $scores = collect($validated['criteria'])->pluck('score');
+            $overallRating = intval(round($scores->avg()));
+
+            $userRating = UserRating::create([
+                'user_id' => $validated['user_id'],
+                'reviewer_id' => $reviewerId,
+                'overall_rating' => $overallRating,
+                'comment' => $validated['comment'] ?? null,
+            ]);
+
+            // الصاق معیارها با score و comment
+            foreach ($validated['criteria'] as $criterion) {
+                $userRating->criteria()->attach($criterion['id'], [
+                    'score' => $criterion['score'],
+                    'comment' => $criterion['comment'] ?? null,
+                ]);
+            }
+
+            return response()->json($userRating->load('criteria'), 201);
+        });
     }
 }

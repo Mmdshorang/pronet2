@@ -57,7 +57,7 @@ class CompanyController extends Controller
     {
         try {
             $company = Company::with(['location', 'users', 'ratings.reviewer'])->findOrFail($id);
-            
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Company retrieved successfully',
@@ -124,7 +124,7 @@ class CompanyController extends Controller
 
             $validated = $validator->validated();
             $validated['password'] = bcrypt($validated['password']);
-            
+
             $company = Company::create($validated);
 
             return response()->json([

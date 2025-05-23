@@ -12,7 +12,6 @@ class CreateLocationsTable extends Migration
             $table->id();
             $table->string('city');
             $table->string('country');
-            $table->string('state');
             $table->timestamps();
         });
     }
@@ -21,4 +20,6 @@ class CreateLocationsTable extends Migration
     {
         Schema::dropIfExists('locations');
     }
+
+
 }

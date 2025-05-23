@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class UserRating extends Model
 {
     protected $fillable = [
-        'user_id', 'reviewer_id', 'professional_capabilities', 'teamwork',
-        'ethics_and_relations', 'punctuality', 'behavior', 'comment'
+        'user_id',
+        'reviewer_id',
+        'overall_rating',
+        'comment',
     ];
 
     public function user(): BelongsTo

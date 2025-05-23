@@ -20,6 +20,7 @@ class CreateCompaniesTable extends Migration
             $table->string('website')->nullable();
             $table->string('phone')->nullable();
             $table->timestamps();
+            
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('set null');
         });

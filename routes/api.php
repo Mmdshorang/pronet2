@@ -11,7 +11,8 @@ use App\Http\Controllers\{
     AchievementController,
     UserRatingController,
     CompanyRatingController,
-    LocationController
+    LocationController,
+    
 };
 
 // 🌐 روت‌های عمومی (بدون نیاز به لاگین)
