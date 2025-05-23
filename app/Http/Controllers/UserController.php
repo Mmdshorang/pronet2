@@ -6,7 +6,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-
+use App\Models\Company;
+use Illuminate\Validation\Rule;
+use App\Models\UserCompany;
 class UserController extends Controller
 {
     public function changePassword(Request $request)
@@ -101,15 +103,37 @@ class UserController extends Controller
             ], 500);
         }
     }
+    public function searchUsers(Request $request)
+    {
+        $query = $request->input('q');
+
+        if (!$query || trim($query) === '') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Query parameter "q" is required.'
+            ], 400);
+        }
+
+        $users = User::where('name', 'like', "%{$query}%")
+                    ->orWhere('email', 'like', "%{$query}%")
+                    ->limit(10)
+                    ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Users retrieved successfully.',
+            'data' => $users
+        ]);
+    }
 
     public function show($id)
     {
         try {
             $user = User::with([
-                'skills', 
-                'achievements', 
-                'receivedRatings.reviewer', 
-                'companies', 
+                'skills',
+                'achievements',
+                'receivedRatings.reviewer',
+                'companies',
                 'location'
             ])->findOrFail($id);
 
@@ -127,7 +151,144 @@ class UserController extends Controller
             ], 500);
         }
     }
+    public function profile(Request $request)
+{
+    try {
+        $user = $request->user()->load([
+            'skills',
+            'achievements',
+            'receivedRatings.reviewer',
+            'companies', // سابقه شغلی
+            'location'
+        ]);
 
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User profile retrieved successfully',
+            'data' => $user
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to retrieve user profile',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+// public function addWorkHistory(Request $request)
+// {
+//     $request->validate([
+//         'company_id' => 'required|exists:companies,id'
+//     ]);
+
+//     $user = $request->user();
+//     $user->companies()->syncWithoutDetaching([$request->company_id]);
+
+//     return response()->json([
+//         'status' => 'success',
+//         'message' => 'Company added to work history successfully'
+//     ]);
+// }
+
+// public function removeWorkHistory(Request $request, Company $company)
+// {
+//     $user = $request->user();
+//     $user->companies()->detach($company->id);
+
+//     return response()->json([
+//         'status' => 'success',
+//         'message' => 'Company removed from work history successfully'
+//     ]);
+// }
+
+public function addWorkHistory(Request $request)
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            'company_id' => 'required|exists:companies,id',
+            'job_title' => 'required|string|max:255',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'description' => 'nullable|string',
+            'employment_type' => ['nullable', Rule::in(['تمام‌وقت', 'پاره‌وقت', 'پروژه‌ای', 'کارآموزی'])],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = $request->user();
+        $data = $validator->validated();
+
+        $existing = UserCompany::where('user_id', $user->id)
+                               ->where('company_id', $data['company_id'])
+                               ->first();
+        if ($existing) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'این سابقه شغلی قبلاً ثبت شده است.'
+            ], 409);
+        }
+
+        $userCompany = new UserCompany();
+        $userCompany->user_id = $user->id;
+        $userCompany->company_id = $data['company_id'];
+        $userCompany->job_title = $data['job_title'];
+        $userCompany->start_date = $data['start_date'];
+        $userCompany->end_date = $data['end_date'] ?? null;
+        $userCompany->description = $data['description'] ?? null;
+        $userCompany->employment_type = $data['employment_type'] ?? null;
+        $userCompany->save();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'سابقه شغلی با موفقیت اضافه شد.',
+            'data' => $userCompany
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'خطا در افزودن سابقه شغلی',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+public function removeWorkHistory(Request $request, $companyId)
+{
+    try {
+        $user = $request->user();
+
+        $record = UserCompany::where('user_id', $user->id)
+                             ->where('company_id', $companyId)
+                             ->first();
+
+        if (!$record) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'سابقه شغلی یافت نشد.'
+            ], 404);
+        }
+
+        $record->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'سابقه شغلی با موفقیت حذف شد.'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'خطا در حذف سابقه شغلی',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
     public function update(Request $request)
     {
         try {
