@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -106,12 +107,13 @@ class CompanyController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:companies',
                 'password' => 'required|string|min:6',
-                'location_id' => 'required|exists:locations,id',
                 'logo' => 'nullable|string',
                 'description' => 'nullable|string',
                 'industry' => 'nullable|string|max:255',
                 'website' => 'nullable|url|max:255',
-                'phone' => 'nullable|string|max:20'
+                'phone' => 'nullable|string|max:20',
+                'city' => 'required|string|max:255',
+                'country' => 'required|string|max:255',
             ]);
 
             if ($validator->fails()) {
@@ -123,8 +125,20 @@ class CompanyController extends Controller
             }
 
             $validated = $validator->validated();
+
+            // پیدا کردن یا ساخت لوکیشن
+            $location = Location::findOrCreate($validated['city'], $validated['country']);
+
+            // رمزنگاری پسورد
             $validated['password'] = bcrypt($validated['password']);
 
+            // اضافه کردن location_id
+            $validated['location_id'] = $location->id;
+
+            // حذف فیلدهای city و country از $validated چون در جدول company نیستند
+            unset($validated['city'], $validated['country']);
+
+            // ساخت شرکت
             $company = Company::create($validated);
 
             return response()->json([
@@ -142,13 +156,15 @@ class CompanyController extends Controller
         }
     }
 
+
     public function update(Request $request, $id)
     {
         try {
             $validator = Validator::make($request->all(), [
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|unique:companies,email,' . $id,
-                'location_id' => 'sometimes|required|exists:locations,id',
+                'city' => 'sometimes|required|string|max:255',
+                'country' => 'sometimes|required|string|max:255',
                 'logo' => 'nullable|string',
                 'description' => 'nullable|string',
                 'industry' => 'nullable|string|max:255',
@@ -164,13 +180,25 @@ class CompanyController extends Controller
                 ], 422);
             }
 
+            $validated = $validator->validated();
+
+            // پیدا کردن شرکت
             $company = Company::findOrFail($id);
-            $company->update($validator->validated());
+
+            // اگر city و country ارسال شده بود، موقعیت را پیدا یا ایجاد کن
+            if (isset($validated['city']) && isset($validated['country'])) {
+                $location = Location::findOrCreate($validated['city'], $validated['country']);
+                $validated['location_id'] = $location->id;
+                unset($validated['city'], $validated['country']); // حذف از آرایه برای جلوگیری از ارور
+            }
+
+            // به‌روزرسانی شرکت
+            $company->update($validated);
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Company updated successfully',
-                'data' => $company
+                'data' => $company->load('location') // با لوکیشن
             ]);
 
         } catch (\Exception $e) {
@@ -181,7 +209,6 @@ class CompanyController extends Controller
             ], 500);
         }
     }
-
 
     public function destroy($id)
     {

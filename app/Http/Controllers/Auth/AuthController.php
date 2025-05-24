@@ -18,7 +18,8 @@ class AuthController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users',
                 'password' => 'required|string|min:6|confirmed',
-                'location_id' => 'nullable|exists:locations,id'
+                'city' => 'nullable|string|max:255',
+                'country' => 'nullable|string|max:255',
             ]);
 
             if ($validator->fails()) {
@@ -29,18 +30,25 @@ class AuthController extends Controller
                 ], 422);
             }
 
+            $validated = $validator->validated();
+
+            $locationId = null;
+            if (!empty($validated['city']) && !empty($validated['country'])) {
+                $location = \App\Models\Location::findOrCreate($validated['city'], $validated['country']);
+                $locationId = $location->id;
+            }
+
             $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
                 'role' => 'user',
-                'location_id' => $request->location_id,
+                'location_id' => $locationId,
                 'email_verified_at' => now()
             ]);
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // بارگذاری ارتباطات
             $user->load([
                 'skills',
                 'achievements',

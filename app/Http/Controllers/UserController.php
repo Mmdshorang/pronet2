@@ -289,49 +289,60 @@ public function removeWorkHistory(Request $request, $companyId)
         ], 500);
     }
 }
-    public function update(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'name' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|email|unique:users,email,' . $request->user()->id,
-                'location_id' => 'sometimes|required|exists:locations,id',
-                'password' => 'nullable|string|min:6',
-                'bio' => 'nullable|string',
-                'phone' => 'nullable|string|max:20',
-                'linkedin_url' => 'nullable|url|max:255',
-                'github_url' => 'nullable|url|max:255'
-            ]);
+public function update(Request $request)
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,' . $request->user()->id,
+            'location_id' => 'sometimes|required|exists:locations,id',
+            'password' => 'nullable|string|min:6',
+            'bio' => 'nullable|string',
+            'phone' => 'nullable|string|max:20',
+            'linkedin_url' => 'nullable|url|max:255',
+            'city' => 'sometimes|required|string|max:255',
+            'country' => 'sometimes|required|string|max:255',
+            'github_url' => 'nullable|url|max:255'
+        ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $user = $request->user();
-            $validated = $validator->validated();
-
-            if (isset($validated['password'])) {
-                $validated['password'] = Hash::make($validated['password']);
-            }
-
-            $user->update($validated);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'User updated successfully',
-                'data' => $user->fresh(['skills', 'achievements', 'location'])
-            ]);
-
-        } catch (\Exception $e) {
+        if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update user',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
+
+        $validated = $validator->validated();
+
+        // اگر city و country ارسال شده باشند، باید location رو به‌روز کنیم
+        if (isset($validated['city']) && isset($validated['country'])) {
+            $location = \App\Models\Location::findOrCreate($validated['city'], $validated['country']);
+            $validated['location_id'] = $location->id; // تعیین location_id جدید
+            unset($validated['city'], $validated['country']); // حذف مقادیر city و country از آرایه
+        }
+
+        // اگر پسورد جدید داده شده بود، باید آن را هش کنیم
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        }
+
+        $user = $request->user();
+        $user->update($validated); // بروزرسانی اطلاعات کاربر
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User updated successfully',
+            'data' => $user->fresh(['skills', 'achievements', 'location']) // بارگذاری اطلاعات تازه
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to update user',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 }
