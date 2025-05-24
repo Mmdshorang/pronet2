@@ -43,12 +43,11 @@ class AuthController extends Controller
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'user',
-                'location_id' => $locationId,
                 'email_verified_at' => now()
             ]);
 
             $token = $user->createToken('auth_token')->plainTextToken;
-
+            $user->refresh();
             $user->load([
                 'skills',
                 'achievements',
@@ -88,7 +87,7 @@ class AuthController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Validation failed',
+                    'message' => 'اطلاعات وارد شده درست نیستند‍',
                     'errors' => $validator->errors()
                 ], 422);
             }
@@ -119,7 +118,11 @@ class AuthController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
-                        'location_id' => $user->location_id,
+                         'bio' => $user->bio,
+                        'profile_photo' => $user->profile_photo,
+                        'phone' => $user->phone,
+                        'linkedin_url' => $user->linkedin_url,
+                        'github_url' => $user->github_url,
                         'email_verified_at' => $user->email_verified_at,
                         'created_at' => $user->created_at,
                         'updated_at' => $user->updated_at,

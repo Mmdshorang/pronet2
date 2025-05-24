@@ -295,14 +295,15 @@ public function update(Request $request)
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:users,email,' . $request->user()->id,
-            'location_id' => 'sometimes|required|exists:locations,id',
+            'profile_photo' => 'nullable|`````url`````|max:255',
             'password' => 'nullable|string|min:6',
             'bio' => 'nullable|string',
             'phone' => 'nullable|string|max:20',
             'linkedin_url' => 'nullable|url|max:255',
             'city' => 'sometimes|required|string|max:255',
             'country' => 'sometimes|required|string|max:255',
-            'github_url' => 'nullable|url|max:255'
+            'github_url' => 'nullable|url|max:255',
+
         ]);
 
         if ($validator->fails()) {

@@ -16,6 +16,11 @@ class User extends Authenticatable
         'password',
         'role',
         'location_id',
+        'bio',
+        'phone',
+        'linkedin_url',
+        'github_url',
+        'profile_photo',
         'email_verified_at',
         'remember_token',
     ];
