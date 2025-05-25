@@ -4,22 +4,31 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 
+use App\Models\Achievement;
+
 class AchievementController extends Controller
 {
     public function store(Request $request)
     {
         // اعتبارسنجی برای فیلدهای جدید
         $validated = $request->validate([
-            'title' => 'required|string',
+            'title' => 'required|string|max:255',
             'description' => 'required|string',
             'date' => 'required|date',
-            'issuer' => 'required|string',
+            'issuer' => 'required|string|max:255',
         ]);
 
         // ذخیره دستاورد جدید
-        $achievement = $request->user()->achievements()->create($validated);
+        $user = $request->user();
+        $user->achievements()->create($validated);
 
-        return response()->json($achievement, 201);
+        // بازگرداندن لیست به‌روز شده دستاوردها
+        $achievements = $user->achievements()->latest('date')->get();
+
+        return response()->json([
+            'message' => 'Achievement added successfully',
+            'achievements' => $achievements,
+        ], 201);
     }
 
     public function destroy($id)
@@ -30,7 +39,12 @@ class AchievementController extends Controller
         // حذف دستاورد
         $achievement->delete();
 
-        return response()->json(['message' => 'Achievement deleted']);
+        // بازگرداندن لیست جدید
+        $achievements = auth()->user()->achievements()->latest('date')->get();
+
+        return response()->json([
+            'message' => 'Achievement deleted successfully',
+            'achievements' => $achievements,
+        ]);
     }
 }
-

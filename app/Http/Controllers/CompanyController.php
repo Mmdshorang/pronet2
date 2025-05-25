@@ -13,38 +13,48 @@ class CompanyController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Company::with(['location', 'users', 'ratings']);
+            $query = Company::with(['location']) // حذف users
+                ->withAvg('ratings', 'overall_rating')
+                ->withCount('ratings');
 
-            // Search by name
-            if ($request->has('name')) {
+            if ($request->filled('name')) {
                 $query->where('name', 'like', "%{$request->name}%");
             }
 
-            // Search by city
-            if ($request->has('city')) {
+            if ($request->filled('city')) {
                 $query->whereHas('location', function ($q) use ($request) {
                     $q->where('city', 'like', "%{$request->city}%");
                 });
             }
 
-            // Search by industry
-            if ($request->has('industry')) {
+            if ($request->filled('industry')) {
                 $query->where('industry', 'like', "%{$request->industry}%");
             }
 
             $companies = $query->paginate(10);
 
+            $data = $companies->getCollection()->transform(function ($company) {
+                return [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'industry' => $company->industry,
+                    'logo' => $company->logo,
+                    'city' => $company->location->city ?? null,
+                    'avg_rating' => round($company->ratings_avg_overall_rating, 1),
+                    'ratings_count' => $company->ratings_count,
+                ];
+            });
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Companies retrieved successfully',
                 'data' => [
-                    'companies' => $companies,
+                    'companies' => $data,
                     'total' => $companies->total(),
                     'current_page' => $companies->currentPage(),
                     'per_page' => $companies->perPage()
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -57,6 +67,7 @@ class CompanyController extends Controller
     public function show($id)
     {
         try {
+            // لود کردن شرکت با اطلاعات مرتبط مثل مکان و نظرات
             $company = Company::with(['location', 'users', 'ratings.reviewer'])->findOrFail($id);
 
             return response()->json([
@@ -73,6 +84,7 @@ class CompanyController extends Controller
             ], 500);
         }
     }
+
 
     public function employees($id)
     {

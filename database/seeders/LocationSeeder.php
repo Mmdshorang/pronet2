@@ -10,25 +10,25 @@ class LocationSeeder extends Seeder
     public function run(): void
     {
         $locations = [
-            ['city' => 'تهران', 'country' => 'ایران', 'state' => 'تهران'],
-            ['city' => 'اصفهان', 'country' => 'ایران', 'state' => 'اصفهان'],
-            ['city' => 'شیراز', 'country' => 'ایران', 'state' => 'فارس'],
-            ['city' => 'تبریز', 'country' => 'ایران', 'state' => 'آذربایجان شرقی'],
-            ['city' => 'مشهد', 'country' => 'ایران', 'state' => 'خراسان رضوی'],
-            ['city' => 'اهواز', 'country' => 'ایران', 'state' => 'خوزستان'],
-            ['city' => 'کرج', 'country' => 'ایران', 'state' => 'البرز'],
-            ['city' => 'قم', 'country' => 'ایران', 'state' => 'قم'],
-            ['city' => 'کرمانشاه', 'country' => 'ایران', 'state' => 'کرمانشاه'],
-            ['city' => 'ارومیه', 'country' => 'ایران', 'state' => 'آذربایجان غربی'],
-            ['city' => 'یزد', 'country' => 'ایران', 'state' => 'یزد'],
-            ['city' => 'اهواز', 'country' => 'ایران', 'state' => 'خوزستان'],
-            ['city' => 'کرمان', 'country' => 'ایران', 'state' => 'کرمان'],
-            ['city' => 'همدان', 'country' => 'ایران', 'state' => 'همدان'],
-            ['city' => 'اراک', 'country' => 'ایران', 'state' => 'مرکزی'],
+            ['city' => 'تهران', 'country' => 'ایران'],
+            ['city' => 'اصفهان', 'country' => 'ایران'],
+            ['city' => 'شیراز', 'country' => 'ایران'],
+        ['city' => 'تبریز', 'country' => 'ایران'],
+            ['city' => 'مشهد', 'country' => 'ایران'],
+            ['city' => 'اهواز', 'country' => 'ایران'],
+            ['city' => 'کرج', 'country' => 'ایران'],
+            ['city' => 'قم', 'country' => 'ایران'],
+            ['city' => 'کرمانشاه', 'country' => 'ایران'],
+            ['city' => 'ارومیه', 'country' => 'ایران'],
+            ['city' => 'یزد', 'country' => 'ایران'],
+            ['city' => 'اهواز', 'country' => 'ایران'],
+            ['city' => 'کرمان', 'country' => 'ایران'],
+            ['city' => 'همدان', 'country' => 'ایران'],
+            ['city' => 'اراک', 'country' => 'ایران'],
         ];
 
         foreach ($locations as $location) {
             Location::create($location);
         }
     }
-} 
+}
