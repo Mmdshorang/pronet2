@@ -2,8 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return ['Laravel' => app()->version()];
+Route::get('/favicon.ico', function () {
+    return response('', 204);
 });
 
+Route::get('/', function () {
+    return "salam";
+});
 

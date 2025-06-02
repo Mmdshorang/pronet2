@@ -15,7 +15,6 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'location_id',
         'bio',
         'phone',
         'linkedin_url',
@@ -36,9 +35,14 @@ class User extends Authenticatable
 
     public function companies()
     {
-        return $this->belongsToMany(Company::class, 'user_company')
+        return $this->belongsToMany(Company::class, 'company_user')
             ->withPivot('job_title', 'start_date', 'end_date', 'description', 'employment_type');
     }
+    public function companyRelations()
+{
+    return $this->hasMany(UserCompany::class);
+}
+
 
     public function skills()
     {

@@ -6,11 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserCompany extends Model
 {
-    protected $table = 'user_company';
+    protected $table = 'company_user';
 
     protected $fillable = [
         'user_id', 'company_id', 'job_title', 'start_date', 'end_date', 'description', 'employment_type'
     ];
+
+    public $timestamps = false;
+    public $incrementing = false;
+    protected $primaryKey = null;
 
     public function user()
     {

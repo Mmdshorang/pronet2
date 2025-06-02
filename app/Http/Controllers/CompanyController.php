@@ -10,70 +10,91 @@ use Illuminate\Auth\AuthenticationException;
 
 class CompanyController extends Controller
 {
-    public function index(Request $request)
-    {
-        try {
-            $query = Company::with(['location']) // حذف users
-                ->withAvg('ratings', 'overall_rating')
-                ->withCount('ratings');
+  public function index(Request $request)
+{
+    try {
+        // اعتبارسنجی ورودی‌ها (همه اختیاری ولی باید استرینگ باشن)
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'city' => 'sometimes|string|max:255',
+            'industry' => 'sometimes|string|max:255',
+        ]);
 
-            if ($request->filled('name')) {
-                $query->where('name', 'like', "%{$request->name}%");
-            }
+        $query = Company::with(['location'])
+            ->withAvg('ratings', 'overall_rating')
+            ->withCount('ratings');
 
-            if ($request->filled('city')) {
-                $query->whereHas('location', function ($q) use ($request) {
-                    $q->where('city', 'like', "%{$request->city}%");
-                });
-            }
-
-            if ($request->filled('industry')) {
-                $query->where('industry', 'like', "%{$request->industry}%");
-            }
-
-            $companies = $query->paginate(10);
-
-            $data = $companies->getCollection()->transform(function ($company) {
-                return [
-                    'id' => $company->id,
-                    'name' => $company->name,
-                    'industry' => $company->industry,
-                    'logo' => $company->logo,
-                    'city' => $company->location->city ?? null,
-                    'avg_rating' => round($company->ratings_avg_overall_rating, 1),
-                    'ratings_count' => $company->ratings_count,
-                ];
-            });
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Companies retrieved successfully',
-                'data' => [
-                    'companies' => $data,
-                    'total' => $companies->total(),
-                    'current_page' => $companies->currentPage(),
-                    'per_page' => $companies->perPage()
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve companies',
-                'error' => $e->getMessage()
-            ], 500);
+        if ($request->filled('name')) {
+            $query->where('name', 'like', "%{$request->name}%");
         }
+
+        if ($request->filled('city')) {
+            $query->whereHas('location', function ($q) use ($request) {
+                $q->where('city', 'like', "%{$request->city}%");
+            });
+        }
+
+        if ($request->filled('industry')) {
+            $query->where('industry', 'like', "%{$request->industry}%");
+        }
+
+        $companies = $query->paginate(10);
+
+        $data = $companies->getCollection()->transform(function ($company) {
+            return [
+                'id' => $company->id,
+                'name' => $company->name,
+                'industry' => $company->industry,
+                'logo' => $company->logo,
+                'city' => $company->location->city ?? null,
+                'avg_rating' => round($company->ratings_avg_overall_rating, 1),
+                'ratings_count' => $company->ratings_count,
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Companies retrieved successfully',
+            'data' => [
+                'companies' => $data,
+                'total' => $companies->total(),
+                'current_page' => $companies->currentPage(),
+                'per_page' => $companies->perPage()
+            ]
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to retrieve companies',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function show($id)
     {
         try {
-            // لود کردن شرکت با اطلاعات مرتبط مثل مکان و نظرات
-            $company = Company::with(['location', 'users', 'ratings.reviewer'])->findOrFail($id);
+            // لود کردن شرکت با مکان و نظرات
+            $company = Company::with(['location', 'ratings.reviewer', 'ratings.criteria'])->findOrFail($id);
+
+            // محاسبه میانگین امتیاز و تعداد رای‌ها
+            $averageRating = $company->ratings()->avg('overall_rating');
+            $ratingsCount = $company->ratings()->count();
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Company retrieved successfully',
-                'data' => $company
+                'data' => [
+                    'company' => $company,
+                    'average_rating' => round($averageRating, 2), // مثلاً 4.25
+                    'ratings_count' => $ratingsCount
+                ]
             ]);
 
         } catch (\Exception $e) {
@@ -86,31 +107,34 @@ class CompanyController extends Controller
     }
 
 
+
     public function employees($id)
     {
         try {
             $company = Company::findOrFail($id);
             $employees = $company->users()
                 ->with(['skills', 'achievements', 'location'])
-                ->get();
+                ->get()
+                ->makeHidden(['pivot']); // اگر لازم است
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Company employees retrieved successfully',
                 'data' => [
                     'employees' => $employees,
-                    'total_employees' => $employees->count()
-                ]
+                    'total_employees' => $employees->count(),
+                ],
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Failed to retrieve company employees',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
+
 
     public function store(Request $request)
     {
@@ -119,10 +143,10 @@ class CompanyController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:companies',
                 'password' => 'required|string|min:6',
-                'logo' => 'nullable|string',
+                'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'description' => 'nullable|string',
                 'industry' => 'nullable|string|max:255',
-                'website' => 'nullable|url|max:255',
+                'website' => 'nullable|string|max:255',
                 'phone' => 'nullable|string|max:20',
                 'city' => 'required|string|max:255',
                 'country' => 'required|string|max:255',
@@ -149,9 +173,15 @@ class CompanyController extends Controller
 
             // حذف فیلدهای city و country از $validated چون در جدول company نیستند
             unset($validated['city'], $validated['country']);
+if ($request->hasFile('logo')) {
+    $path = $request->file('logo')->store('uploads', 'public');
+    $url = asset('storage/' . $path);
+    $validated['logo'] = $url;
+}
 
             // ساخت شرکت
             $company = Company::create($validated);
+
 
             return response()->json([
                 'status' => 'success',
@@ -163,7 +193,7 @@ class CompanyController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Failed to create company',
-                'error' => $e->getMessage()
+                'error' => "jd"
             ], 500);
         }
     }
@@ -230,7 +260,7 @@ class CompanyController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Company deleted successfully'
+                'message' => 'شرکت با موفقیت حذف شد'
             ]);
 
         } catch (\Exception $e) {

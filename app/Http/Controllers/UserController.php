@@ -103,9 +103,12 @@ class UserController extends Controller
             ], 500);
         }
     }
-    public function searchUsers(Request $request)
+    public function searchUsersAndCompanies(Request $request)
     {
         $query = $request->input('q');
+        $page = (int) $request->input('page', 1);
+        $limit = 6;
+        $offset = ($page - 1) * $limit;
 
         if (!$query || trim($query) === '') {
             return response()->json([
@@ -114,17 +117,60 @@ class UserController extends Controller
             ], 400);
         }
 
-        $users = User::where('name', 'like', "%{$query}%")
-                    ->orWhere('email', 'like', "%{$query}%")
-                    ->limit(10)
-                    ->get();
+        // تعداد کل آیتم‌هایی که باید برگردونیم (نصف برای هر نوع)
+        $halfLimit = (int) ceil($limit / 2);
+
+        // گرفتن کاربران
+        $usersQuery = User::where('name', 'like', "%{$query}%")
+            ->orWhere('email', 'like', "%{$query}%");
+
+        $usersCount = $usersQuery->count();
+        $users = $usersQuery->select('id', 'name', 'email', 'profile_photo')
+            ->skip($offset)
+            ->take($halfLimit)
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'photo' => $user->profile_photo,
+                    'type' => 'user',
+                ];
+            });
+
+        // گرفتن شرکت‌ها
+        $companiesQuery = Company::where('name', 'like', "%{$query}%")
+            ->orWhere('email', 'like', "%{$query}%");
+
+        $companiesCount = $companiesQuery->count();
+        $companies = $companiesQuery->select('id', 'name', 'email', 'logo')
+            ->skip($offset)
+            ->take($halfLimit)
+            ->get()
+            ->map(function ($company) {
+                return [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'email' => $company->email,
+                    'photo' => $company->logo,
+                    'type' => 'company',
+                ];
+            });
+
+        $results = $users->merge($companies)->values();
+
+        $hasMore = ($usersCount > $offset + $halfLimit) || ($companiesCount > $offset + $halfLimit);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Users retrieved successfully.',
-            'data' => $users
+            'message' => 'Search results retrieved successfully.',
+            'data' => $results,
+            'hasMore' => $hasMore,
+            'currentPage' => $page
         ]);
     }
+
 
     public function show($id)
     {
@@ -292,18 +338,20 @@ public function removeWorkHistory(Request $request, $companyId)
 public function update(Request $request)
 {
     try {
+
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:users,email,' . $request->user()->id,
-            'profile_photo' => 'nullable|`````url`````|max:255',
+           'profile_photo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+
             'password' => 'nullable|string|min:6',
             'bio' => 'nullable|string',
             'phone' => 'nullable|string|max:20',
-            'linkedin_url' => 'nullable|url|max:255',
+            'linkedin_url' => 'nullable|string|max:255',  // به string تغییر داده شد
             'city' => 'sometimes|required|string|max:255',
             'country' => 'sometimes|required|string|max:255',
-            'github_url' => 'nullable|url|max:255',
-
+            'github_url' => 'nullable|string|max:255',  // به string تغییر داده شد
         ]);
 
         if ($validator->fails()) {
@@ -323,16 +371,30 @@ public function update(Request $request)
             unset($validated['city'], $validated['country']); // حذف مقادیر city و country از آرایه
         }
 
+
+
+      // ذخیره فایل در پوشه public/uploads
+    $path = $request->file('profile_photo')->store('uploads', 'public');
+
+    // تولید لینک عمومی فایل
+    $url = asset('storage/' . $path);
+
+    $validated['profile_photo'] = $url;
+
+
         // اگر پسورد جدید داده شده بود، باید آن را هش کنیم
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         }
 
+        // بروزرسانی اطلاعات کاربر
         $user = $request->user();
-        $user->update($validated); // بروزرسانی اطلاعات کاربر
+        $user->update($validated);
 
         return response()->json([
             'status' => 'success',
+            'profile_photo' =>$path,
+
             'message' => 'User updated successfully',
             'data' => $user->fresh(['skills', 'achievements', 'location']) // بارگذاری اطلاعات تازه
         ]);
@@ -344,6 +406,24 @@ public function update(Request $request)
             'error' => $e->getMessage()
         ], 500);
     }
+}
+public function upload(Request $request)
+{
+    $request->validate([
+        'profile_photo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
+
+    // ذخیره فایل در پوشه public/uploads
+    $path = $request->file('profile_photo')->store('uploads', 'public');
+
+    // تولید لینک عمومی فایل
+    $url = asset('storage/' . $path);
+
+    return response()->json([
+        'status' => 'success',
+        'profile_photo_url' => $url,
+        'message' => 'Profile photo uploaded successfully',
+    ]);
 }
 
 }
