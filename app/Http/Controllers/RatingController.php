@@ -2,108 +2,96 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Rating;
+use App\Models\RatingCriterion;
+use App\Models\RatingValue;
 use App\Models\User;
-use App\Models\UserRating;
-use App\Models\RatingCriteria;
+use App\Models\Company;
+use App\Models\UserCompany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
 
 class RatingController extends Controller
 {
-    public function store(Request $request, User $user)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'overall_rating' => 'required|integer|min:1|max:5',
-                'comment' => 'nullable|string',
-                'criteria' => 'required|array',
-                'criteria.*.id' => 'required|exists:rating_criteria,id',
-                'criteria.*.score' => 'required|integer|min:1|max:5',
-                'criteria.*.comment' => 'nullable|string'
-            ]);
+  public function store(Request $request)
+{
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
 
-            $rating = UserRating::create([
-                'user_id' => $user->id,
-                'reviewer_id' => Auth::id(),
-                'overall_rating' => $request->overall_rating,
-                'comment' => $request->comment
-            ]);
+    $validated = $request->validate([
+        'rateable_type' => 'required|string|in:user,company',
+        'rateable_id' => 'required|integer',
+        'criteriaValues' => 'required|array|min:1',
+        'criteriaValues.*.criterionId' => 'required|string|exists:rating_criteria,name',
+        'criteriaValues.*.score' => 'required|integer|min:1|max:5',
+        'comment' => 'nullable|string|max:1000',
+    ]);
 
-            foreach ($request->criteria as $criterion) {
-                $rating->criteria()->attach($criterion['id'], [
-                    'score' => $criterion['score'],
-                    'comment' => $criterion['comment'] ?? null
-                ]);
-            }
+    $user = Auth::user();
+  
+    $rateableType = $validated['rateable_type'] === 'user' ? User::class : Company::class;
+    $rateableId = $validated['rateable_id'];
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Rating created successfully',
-                'data' => $rating->load(['criteria', 'reviewer'])
-            ], 201);
+    // 👮‍♂️ بررسی مجوز: فقط همکارها یا کارکنان
+    if ($rateableType === User::class) {
+        $targetUser = User::findOrFail($rateableId);
 
-        } catch (\Exception $e) {
+        $commonCompanies = UserCompany::where('user_id', $user->id)
+            ->pluck('company_id')
+            ->intersect(
+                UserCompany::where('user_id', $targetUser->id)->pluck('company_id')
+            );
+
+        if ($commonCompanies->isEmpty()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to create rating',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'You can only rate users you have worked with.'
+            ], 403);
+        }
+    } else {
+        // امتیاز به شرکت
+        $hasWorked = UserCompany::where('user_id', $user->id)
+            ->where('company_id', $rateableId)
+            ->exists();
+
+        if (!$hasWorked) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You can only rate companies you have worked at.'
+            ], 403);
         }
     }
 
-    public function index(User $user)
-    {
-        try {
-            $ratings = $user->receivedRatings()
-                ->with(['reviewer', 'criteria'])
-                ->latest()
-                ->get();
+    // محاسبه میانگین امتیاز کلی
+    $scores = collect($validated['criteriaValues'])->pluck('score');
+    $average = round($scores->avg(), 2);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Ratings retrieved successfully',
-                'data' => [
-                    'ratings' => $ratings,
-                    'average_rating' => $ratings->avg('overall_rating'),
-                    'total_ratings' => $ratings->count()
-                ]
-            ]);
+    // ذخیره رکورد اصلی
+    $rating = Rating::create([
+        'reviewer_id' => $user->id,
+        'rater_name' => $user->name,
+        'rateable_type' => $rateableType,
+        'rateable_id' => $rateableId,
+        'overall_rating' => $average,
+        'comment' => $validated['comment'] ?? null,
+    ]);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve ratings',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    // ذخیره تک‌تک مقادیر معیارها
+    foreach ($validated['criteriaValues'] as $item) {
+        $criterion = RatingCriterion::where('name', $item['criterionId'])->first();
+        RatingValue::create([
+            'rating_id' => $rating->id,
+            'rating_criteria_id' => $criterion->id,
+            'score' => $item['score'],
+        ]);
     }
 
-    public function criteria()
-    {
-        try {
-            $criteria = RatingCriteria::all();
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Rating criteria retrieved successfully',
-                'data' => $criteria
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve rating criteria',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-} 
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Rating submitted successfully',
+        'data' => [
+            'rating_id' => $rating->id,
+            'average_score' => $average,
+        ]
+    ]);
+}
+}

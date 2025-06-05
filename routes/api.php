@@ -13,7 +13,7 @@ use App\Http\Controllers\{
     UserRatingController,
     CompanyRatingController,
     LocationController,
-
+RatingController,
 };
 
 // 🌐 روت‌های عمومی (بدون نیاز به لاگین)
@@ -58,9 +58,7 @@ Route::post('/companies', [CompanyController::class, 'store']); // ایجاد
 Route::put('/companies/{company}', [CompanyController::class, 'update']); // ویرایش
 Route::delete('/companies/{company}', [CompanyController::class, 'destroy']); // حذف
 
-// 🟢 گرفتن لیست کارمندان یک شرکت
-// 📌 مثال: GET /api/companies/5/employees
-    // 👨‍💼 مهارت‌ها
+
     Route::post('/skills', [SkillController::class, 'store']); // افزودن مهارت
     Route::post('/skills/{id}', [SkillController::class, 'destroy']); // حذف مهارت
 
@@ -71,6 +69,7 @@ Route::delete('/companies/{company}', [CompanyController::class, 'destroy']); //
     // ⭐ امتیازدهی
     Route::post('/user-ratings', [UserRatingController::class, 'store']); // امتیاز به کاربران
     Route::post('/company-ratings', [CompanyRatingController::class, 'store']); // امتیاز به شرکت‌ها
+     Route::post('/ratings', [RatingController::class, 'store']);
 
     // 🏙️ مدیریت لوکیشن‌ها
     Route::post('/locations', [LocationController::class, 'store']); // افزودن لوکیشن

@@ -10,19 +10,20 @@ use Illuminate\Auth\AuthenticationException;
 
 class CompanyController extends Controller
 {
-  public function index(Request $request)
+public function index(Request $request)
 {
     try {
-        // اعتبارسنجی ورودی‌ها (همه اختیاری ولی باید استرینگ باشن)
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'city' => 'sometimes|string|max:255',
             'industry' => 'sometimes|string|max:255',
         ]);
 
-        $query = Company::with(['location'])
-            ->withAvg('ratings', 'overall_rating')
-            ->withCount('ratings');
+        $query = Company::with([
+            'location',
+            'ratings.ratingValues.criterion',
+            'ratings.reviewer',
+        ]);
 
         if ($request->filled('name')) {
             $query->where('name', 'like', "%{$request->name}%");
@@ -40,26 +41,18 @@ class CompanyController extends Controller
 
         $companies = $query->paginate(10);
 
-        $data = $companies->getCollection()->transform(function ($company) {
-            return [
-                'id' => $company->id,
-                'name' => $company->name,
-                'industry' => $company->industry,
-                'logo' => $company->logo,
-                'city' => $company->location->city ?? null,
-                'avg_rating' => round($company->ratings_avg_overall_rating, 1),
-                'ratings_count' => $company->ratings_count,
-            ];
+        $transformed = $companies->getCollection()->map(function ($company) {
+            return $this->transformCompanyToProfile($company);
         });
 
         return response()->json([
             'status' => 'success',
             'message' => 'Companies retrieved successfully',
             'data' => [
-                'companies' => $data,
+                'companies' => $transformed,
                 'total' => $companies->total(),
                 'current_page' => $companies->currentPage(),
-                'per_page' => $companies->perPage()
+                'per_page' => $companies->perPage(),
             ]
         ]);
     } catch (\Illuminate\Validation\ValidationException $e) {
@@ -76,64 +69,143 @@ class CompanyController extends Controller
         ], 500);
     }
 }
+private function transformCompanyToProfile($company)
+{
+    $ratings = $company->ratings->map(function ($rating) {
+        $criteriaValues = $rating->ratingValues->map(function ($value) {
+            return [
+                'criterionId' => $value->criterion->name,
+                'score' => $value->score,
+            ];
+        });
 
-    public function show($id)
-    {
-        try {
-            // لود کردن شرکت با مکان و نظرات
-            $company = Company::with(['location', 'ratings.reviewer', 'ratings.criteria'])->findOrFail($id);
+        $average = count($criteriaValues)
+            ? round($criteriaValues->avg('score'), 2)
+            : null;
 
-            // محاسبه میانگین امتیاز و تعداد رای‌ها
-            $averageRating = $company->ratings()->avg('overall_rating');
-            $ratingsCount = $company->ratings()->count();
+        return [
+            'id' => (string) $rating->id,
+            'raterName' => optional($rating->reviewer)->name ?? 'Unknown',
+            'criteriaValues' => $criteriaValues,
+            'comment' => $rating->comment,
+            'timestamp' => $rating->created_at,
+            'averageScore' => $average,
+        ];
+    });
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Company retrieved successfully',
-                'data' => [
-                    'company' => $company,
-                    'average_rating' => round($averageRating, 2), // مثلاً 4.25
-                    'ratings_count' => $ratingsCount
-                ]
-            ]);
+    $allScores = $ratings->flatMap(fn ($r) => $r['criteriaValues'])->pluck('score');
+    $overallAverage = count($allScores) ? round($allScores->avg(), 2) : null;
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve company',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
+    return [
+        'id' => (string) $company->id,
+        'name' => $company->name,
+        'industry' => $company->industry,
+        'logo' => $company->logo,
+        'description' => $company->description,
+        "website" => $company->website,
+        "phone" => $company->phone,
+        'country' => optional($company->location)->country,
+        'city' => optional($company->location)->city,
+        'ratings' => $ratings,
+        'overallAverageRating' => $overallAverage,
+    ];
+}
 
 
-    public function employees($id)
-    {
-        try {
-            $company = Company::findOrFail($id);
-            $employees = $company->users()
-                ->with(['skills', 'achievements', 'location'])
-                ->get()
-                ->makeHidden(['pivot']); // اگر لازم است
+public function show($id)
+{
+    try {
+        $company = Company::with([
+            'location',
+            'ratings.reviewer',
+            'ratings.ratingValues.criterion',
+        ])->findOrFail($id);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Company employees retrieved successfully',
-                'data' => [
-                    'employees' => $employees,
-                    'total_employees' => $employees->count(),
+        // محاسبه میانگین کلی بر اساس همه‌ی امتیازهای ثبت‌شده برای این شرکت
+        $allScores = $company->ratings->flatMap(function ($rating) {
+            return $rating->ratingValues->pluck('score');
+        });
+
+        $averageRating = $allScores->count() ? round($allScores->avg(), 2) : null;
+        $ratingsCount = $company->ratings->count();
+
+        // آماده‌سازی خروجی امتیازها با نمایش معیارها
+        $transformedRatings = $company->ratings->map(function ($rating) {
+            return [
+                'id' => (string) $rating->id,
+                'rater' => optional($rating->reviewer)->name ?? 'Unknown',
+                'comment' => $rating->comment,
+                'timestamp' => $rating->created_at,
+                'criteria' => $rating->ratingValues->map(function ($value) {
+                    return [
+                        'criterion' => $value->criterion->name,
+                        'score' => $value->score,
+                    ];
+                }),
+                'averageScore' => round($rating->ratingValues->avg('score'), 2),
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Company retrieved successfully',
+            'data' => [
+                'company' => [
+                    'id' => (string) $company->id,
+                    'name' => $company->name,
+                    'description' => $company->description,
+                    'industry' => $company->industry,
+                    'logo' => $company->logo,
+                    'location' => optional($company->location)->city,
+                    'ratings' => $transformedRatings,
                 ],
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve company employees',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+                'average_rating' => $averageRating,
+                'ratings_count' => $ratingsCount
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to retrieve company',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+
+
+
+  public function employees($id)
+{
+    try {
+        $company = Company::findOrFail($id);
+
+        // فقط اطلاعات ساده‌ی کارمندان
+        $employees = $company->users()->get([
+            'users.id',
+            'name',
+            'email',
+            'profile_photo',
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Company employees retrieved successfully',
+            'data' => [
+                'employees' => $employees,
+                'total_employees' => $employees->count(),
+            ],
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to retrieve company employees',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
 
 
     public function store(Request $request)

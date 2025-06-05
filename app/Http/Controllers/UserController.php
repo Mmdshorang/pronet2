@@ -53,56 +53,101 @@ class UserController extends Controller
         }
     }
 
-    public function index(Request $request)
-    {
-        try {
-            $query = User::with(['skills', 'achievements', 'location']);
+public function index(Request $request)
+{
+    try {
+        $query = User::with([
+            'skills',
+            'achievements',
+            'location',
+            'receivedRatings.ratingValues.criterion',
+            'receivedRatings.reviewer',
+        ]);
 
-            // Search by name
-            if ($request->has('name')) {
-                $query->where('name', 'like', "%{$request->name}%");
-            }
-
-            // Search by skill
-            if ($request->has('skill')) {
-                $query->whereHas('skills', function ($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->skill}%");
-                });
-            }
-
-            // Search by city
-            if ($request->has('city')) {
-                $query->whereHas('location', function ($q) use ($request) {
-                    $q->where('city', 'like', "%{$request->city}%");
-                });
-            }
-
-            // Search by role
-            if ($request->has('role')) {
-                $query->where('role', $request->role);
-            }
-
-            $users = $query->paginate(10);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Users retrieved successfully',
-                'data' => [
-                    'users' => $users,
-                    'total' => $users->total(),
-                    'current_page' => $users->currentPage(),
-                    'per_page' => $users->perPage()
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to retrieve users',
-                'error' => $e->getMessage()
-            ], 500);
+        if ($request->has('name')) {
+            $query->where('name', 'like', "%{$request->name}%");
         }
+
+        if ($request->has('skill')) {
+            $query->whereHas('skills', function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->skill}%");
+            });
+        }
+
+        if ($request->has('city')) {
+            $query->whereHas('location', function ($q) use ($request) {
+                $q->where('city', 'like', "%{$request->city}%");
+            });
+        }
+
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
+
+        $users = $query->paginate(10);
+
+        $transformedUsers = $users->getCollection()->map(function ($user) {
+            return $this->transformUserToProfile($user);
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Users retrieved successfully',
+            'data' => [
+                'users' => $transformedUsers,
+                'total' => $users->total(),
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage()
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to retrieve users',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+private function transformUserToProfile($user)
+{
+    $ratings = $user->receivedRatings->map(function ($rating) {
+        $criteriaValues = $rating->ratingValues->map(function ($value) {
+            return [
+                'criterionId' => $value->criterion->name, // یا می‌تونی از id استفاده کنی
+                'score' => $value->score,
+            ];
+        });
+
+        $average = count($criteriaValues)
+            ? round($criteriaValues->avg('score'), 2)
+            : null;
+
+        return [
+            'id' => (string) $rating->id,
+            'raterName' => optional($rating->reviewer)->name ?? 'Unknown',
+            'criteriaValues' => $criteriaValues,
+            'comment' => $rating->comment,
+            'timestamp' => $rating->created_at,
+            'averageScore' => $average,
+        ];
+    });
+
+    $allScores = $ratings->flatMap(fn ($r) => $r['criteriaValues'])->pluck('score');
+    $overallAverage = count($allScores) ? round($allScores->avg(), 2) : null;
+
+    return [
+        'id' => (string) $user->id,
+        'name' => $user->name,
+        'type' => 'employee',
+        'avatarUrl' => $user->profile_photo,
+        'description' => $user->bio,
+        'ratings' => $ratings,
+        'overallAverageRating' => $overallAverage,
+    ];
+}
+
+
     public function searchUsersAndCompanies(Request $request)
     {
         $query = $request->input('q');
@@ -222,31 +267,7 @@ class UserController extends Controller
         ], 500);
     }
 }
-// public function addWorkHistory(Request $request)
-// {
-//     $request->validate([
-//         'company_id' => 'required|exists:companies,id'
-//     ]);
 
-//     $user = $request->user();
-//     $user->companies()->syncWithoutDetaching([$request->company_id]);
-
-//     return response()->json([
-//         'status' => 'success',
-//         'message' => 'Company added to work history successfully'
-//     ]);
-// }
-
-// public function removeWorkHistory(Request $request, Company $company)
-// {
-//     $user = $request->user();
-//     $user->companies()->detach($company->id);
-
-//     return response()->json([
-//         'status' => 'success',
-//         'message' => 'Company removed from work history successfully'
-//     ]);
-// }
 
 public function addWorkHistory(Request $request)
 {
