@@ -23,22 +23,32 @@ class SkillController extends Controller
 
         return response()->json([
             'message' => 'Skill added successfully',
+            'status' => 'success',
             'skills' => $skills,
         ], 201);
     }
 
     public function destroy($id)
-    {
-        $skill = Skill::where('user_id', auth()->id())->findOrFail($id);
-        $skill->delete();
+{
 
-        // بازگرداندن لیست به‌روز شده مهارت‌ها
-        $skills = auth()->user()->skills()->latest()->get();
 
-        return response()->json([
-            'message' => 'Skill deleted successfully',
-            'skills' => $skills,
-        ]);
-    }
+    $user = auth()->user();
+
+    $skill = Skill::where('id', $id)
+                  ->where('user_id', $user->id)
+                  ->firstOrFail();
+
+    $skill->delete();
+
+    // بازگرداندن لیست به‌روز شده مهارت‌ها
+    $skills = $user->skills()->latest()->get();
+
+    return response()->json([
+        'message' => 'Skill deleted successfully',
+        'status' => 'success',
+        'skills' => $skills,
+    ]);
+}
+
 }
 

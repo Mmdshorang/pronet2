@@ -20,17 +20,18 @@ RatingController,
 // 👤 احراز هویت
 Route::post('/login', [App\Http\Controllers\Auth\AuthController::class, 'login']);
 Route::post('/register', [App\Http\Controllers\Auth\AuthController::class, 'register']);
-Route::post('/upload-profile-photo', [UserController::class, 'upload']);
+
 
 Route::post('/search', [UserController::class, 'searchUsersAndCompanies']);
 // 👥 کاربران
 Route::post('/getusers', [UserController::class, 'index']); // لیست کاربران
+Route::post('/get-companies', [CompanyController::class, 'index']); // لیست شرکت‌ها
 Route::post('/users/{user}', [UserController::class, 'show']); // مشاهده پروفایل کاربر
+Route::post('/companies/{company}', [CompanyController::class, 'show']); // مشاهده شرکت
 
 
 
-Route::post('/companies/{company}/users', [CompanyUserController::class, 'addUser']);
-Route::post('/companies/{company}/users/{user}', [CompanyUserController::class, 'removeUser']);
+
  // جستجوی کاربران
  Route::post('/companies/{id}/employees', [CompanyController::class, 'employees']);
  Route::post('/assignEmployeeToCompany', [CompanyEmployeeController::class, 'assignEmployeeToCompany']);
@@ -41,22 +42,25 @@ Route::post('/locations', [LocationController::class, 'index']); // لیست ل�
 // 🔒 روت‌های خصوصی (نیاز به لاگین)
 Route::middleware('auth:sanctum')->group(function () {
     // 👤 پروفایل کاربر
-    Route::post('/profile', [UserController::class, 'profile'])->middleware('auth:sanctum');
+    Route::post('/profile', [UserController::class, 'profile']);
     Route::post('/user/update', [UserController::class, 'update']); // ویرایش پروفایل
     Route::post('/user/password', [UserController::class, 'changePassword']); // تغییر رمز عبور
     Route::post('/logout', [App\Http\Controllers\Auth\AuthController::class, 'logout']); // خروج
 // افزودن سابقه شغلی جدید به پروفایل کاربر
-    Route::post('/profile/work-history', [UserController::class, 'addWorkHistory']);
-
+Route::post('/upload-profile-photo', [UserController::class, 'upload']);
 // حذف سابقه شغلی خاص از پروفایل کاربر
-    Route::post('/profile/work-history/{company}', [UserController::class, 'removeWorkHistory'])->middleware('auth:sanctum');
+    Route::post('/work-history', [UserController::class, 'addWorkHistory']);
 
-    // 🏢 مدیریت شرکت‌ها
+    // ویرایش سابقه شغلی
+    Route::put('/work-history/{companyId}', [UserController::class, 'updateWorkHistory']);
+
+    // حذف سابقه شغلی
+    Route::delete('/work-history/{companyId}', [UserController::class, 'removeWorkHistory']);
   // شرکت‌ها
-Route::post('/companies', [CompanyController::class, 'store']); // ایجاد
+    Route::post('/companies', [CompanyController::class, 'store']); // ایجاد
 
-Route::put('/companies/{company}', [CompanyController::class, 'update']); // ویرایش
-Route::delete('/companies/{company}', [CompanyController::class, 'destroy']); // حذف
+    Route::put('/companies/{company}', [CompanyController::class, 'update']); // ویرایش
+    Route::delete('/companies/{company}', [CompanyController::class, 'destroy']); // حذف
 
 
     Route::post('/skills', [SkillController::class, 'store']); // افزودن مهارت
@@ -67,14 +71,11 @@ Route::delete('/companies/{company}', [CompanyController::class, 'destroy']); //
     Route::post('/achievements/{id}', [AchievementController::class, 'destroy']); // حذف دستاورد
 
     // ⭐ امتیازدهی
-    Route::post('/user-ratings', [UserRatingController::class, 'store']); // امتیاز به کاربران
-    Route::post('/company-ratings', [CompanyRatingController::class, 'store']); // امتیاز به شرکت‌ها
+   // Route::post('/user-ratings', [UserRatingController::class, 'store']); // امتیاز به کاربران
+    //Route::post('/company-ratings', [CompanyRatingController::class, 'store']); // امتیاز به شرکت‌ها
      Route::post('/ratings', [RatingController::class, 'store']);
-
+     Route::post('/companies/{company}/users', [CompanyUserController::class, 'addUser']);
+    Route::post('/companies/{company}/users/{user}', [CompanyUserController::class, 'removeUser']);
     // 🏙️ مدیریت لوکیشن‌ها
-    Route::post('/locations', [LocationController::class, 'store']); // افزودن لوکیشن
+  //  Route::post('/locations', [LocationController::class, 'store']); // افزودن لوکیشن
 });
-
-// 🏢 شرکت‌ها
-Route::post('/get-companies', [CompanyController::class, 'index']); // لیست شرکت‌ها
-Route::post('/companies/{company}', [CompanyController::class, 'show']); // مشاهده شرکت

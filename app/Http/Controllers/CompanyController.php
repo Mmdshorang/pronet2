@@ -208,67 +208,86 @@ public function show($id)
 
 
 
-    public function store(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:companies',
-                'password' => 'required|string|min:6',
-                'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'description' => 'nullable|string',
-                'industry' => 'nullable|string|max:255',
-                'website' => 'nullable|string|max:255',
-                'phone' => 'nullable|string|max:20',
-                'city' => 'required|string|max:255',
-                'country' => 'required|string|max:255',
-            ]);
+   public function store(Request $request)
+{
+    try {
+        // پیام‌های فارسی برای اعتبارسنجی
+        $messages = [
+            'name.required' => 'وارد کردن نام شرکت الزامی است.',
+            'email.required' => 'وارد کردن ایمیل الزامی است.',
+            'email.email' => 'فرمت ایمیل معتبر نیست.',
+            'email.unique' => 'این ایمیل قبلاً ثبت شده است.',
+            'password.required' => 'وارد کردن رمز عبور الزامی است.',
+            'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
+            'logo.image' => 'فایل لوگو باید یک تصویر باشد.',
+            'logo.mimes' => 'لوگو باید یکی از فرمت‌های jpeg, png, jpg, gif باشد.',
+            'logo.max' => 'حجم لوگو نباید بیشتر از ۲ مگابایت باشد.',
+            'city.required' => 'وارد کردن نام شهر الزامی است.',
+            'country.required' => 'وارد کردن نام کشور الزامی است.',
+        ];
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+        // اعتبارسنجی ورودی‌ها
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:companies',
+            'password' => 'required|string|min:6',
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'description' => 'nullable|string',
+            'industry' => 'nullable|string|max:255',
+            'website' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'city' => 'required|string|max:255',
+            'country' => 'required|string|max:255',
+        ], $messages);
 
-            $validated = $validator->validated();
-
-            // پیدا کردن یا ساخت لوکیشن
-            $location = Location::findOrCreate($validated['city'], $validated['country']);
-
-            // رمزنگاری پسورد
-            $validated['password'] = bcrypt($validated['password']);
-
-            // اضافه کردن location_id
-            $validated['location_id'] = $location->id;
-
-            // حذف فیلدهای city و country از $validated چون در جدول company نیستند
-            unset($validated['city'], $validated['country']);
-if ($request->hasFile('logo')) {
-    $path = $request->file('logo')->store('uploads', 'public');
-    $url = asset('storage/' . $path);
-    $validated['logo'] = $url;
-}
-
-            // ساخت شرکت
-            $company = Company::create($validated);
-
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Company created successfully',
-                'data' => $company
-            ], 201);
-
-        } catch (\Exception $e) {
+        // در صورت خطا در اعتبارسنجی
+        if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to create company',
-                'error' => "jd"
-            ], 500);
+                'message' => 'خطا در اعتبارسنجی اطلاعات',
+                'errors' => $validator->errors()
+            ], 422);
         }
+
+        $validated = $validator->validated();
+
+        // پیدا کردن یا ایجاد لوکیشن
+        $location = Location::findOrCreate($validated['city'], $validated['country']);
+
+        // رمزنگاری رمز عبور
+        $validated['password'] = bcrypt($validated['password']);
+
+        // افزودن location_id
+        $validated['location_id'] = $location->id;
+
+        // حذف city و country چون در جدول companies وجود ندارند
+        unset($validated['city'], $validated['country']);
+
+        // ذخیره فایل لوگو (در صورت وجود)
+        if ($request->hasFile('logo')) {
+            $path = $request->file('logo')->store('uploads', 'public');
+            $url = asset('storage/' . $path);
+            $validated['logo'] = $url;
+        }
+
+        // ساخت شرکت
+        $company = Company::create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'شرکت با موفقیت ایجاد شد.',
+            'data' => $company
+        ], 201);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'خطا در ایجاد شرکت',
+            'error' => $e->getMessage() // در محیط production می‌تونی اینو حذف کنی
+        ], 500);
     }
+}
+
 
 
     public function update(Request $request, $id)

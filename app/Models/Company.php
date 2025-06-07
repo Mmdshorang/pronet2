@@ -37,13 +37,7 @@ class Company extends Model
         return $this->hasMany(UserCompany::class);
     }
 
-    // ❌ قبلی: مخصوص سیستم قبلی امتیازدهی بود
-    // public function ratings()
-    // {
-    //     return $this->hasMany(CompanyRating::class);
-    // }
-
-    // ✅ جدید: امتیازهای چندمعیاره polymorphic
+   
     public function ratings()
     {
         return $this->morphMany(Rating::class, 'rateable');

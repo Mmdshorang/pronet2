@@ -106,6 +106,10 @@ class AuthController extends Controller
                     'message' => 'ایمیل یا رمز عبور نادرست است'
                 ], 200);
             }
+$adminCompanies = $user->companies->where('pivot.job_title', 'admin')->pluck('id');
+
+// چک کردن اگر هیچ شرکتی پیدا نشد و برگرداندن یک مقدار پیش‌فرض
+$adminCompanyId = $adminCompanies->isEmpty() ? null : $adminCompanies->first();
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -130,7 +134,8 @@ class AuthController extends Controller
                         'achievements' => $user->achievements,
                         'receivedRatings' => $user->receivedRatings,
                         'companies' => $user->companies,
-                        'location' => $user->location
+                        'location' => $user->location,
+                        'admin_companies' => $adminCompanies,
                     ],
                     'token' => $token
                 ]
