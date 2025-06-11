@@ -112,16 +112,20 @@ private function transformCompanyToProfile($company)
 }
 
 
-public function show($id)
+
+// ۱. (بهینه‌سازی) استفاده از Route Model Binding برای تزریق خودکار مدل Company
+public function show(Company $company)
 {
     try {
-        $company = Company::with([
+        // با استفاده از Route Model Binding، دیگر نیازی به findOrFail نیست
+        // لاراول این کار را به صورت خودکار انجام می‌دهد.
+        $company->load([
             'location',
             'ratings.reviewer',
             'ratings.ratingValues.criterion',
-        ])->findOrFail($id);
+        ]);
 
-        // محاسبه میانگین کلی بر اساس همه‌ی امتیازهای ثبت‌شده برای این شرکت
+        // محاسبه میانگین کلی
         $allScores = $company->ratings->flatMap(function ($rating) {
             return $rating->ratingValues->pluck('score');
         });
@@ -129,7 +133,7 @@ public function show($id)
         $averageRating = $allScores->count() ? round($allScores->avg(), 2) : null;
         $ratingsCount = $company->ratings->count();
 
-        // آماده‌سازی خروجی امتیازها با نمایش معیارها
+        // آماده‌سازی خروجی امتیازها
         $transformedRatings = $company->ratings->map(function ($rating) {
             return [
                 'id' => (string) $rating->id,
@@ -138,7 +142,7 @@ public function show($id)
                 'timestamp' => $rating->created_at,
                 'criteria' => $rating->ratingValues->map(function ($value) {
                     return [
-                        'criterion' => $value->criterion->name,
+                        'criterion' => optional($value->criterion)->name,
                         'score' => $value->score,
                     ];
                 }),
@@ -160,7 +164,9 @@ public function show($id)
                     'ratings' => $transformedRatings,
                 ],
                 'average_rating' => $averageRating,
-                'ratings_count' => $ratingsCount
+                'ratings_count' => $ratingsCount,
+                // ۲. (مهم) اضافه شدن فلگ برای مجوز ویرایش
+                'can_update' => (bool) optional(auth()->user())->can('update', $company),
             ]
         ]);
     } catch (\Exception $e) {
@@ -171,7 +177,6 @@ public function show($id)
         ], 500);
     }
 }
-
 
 
 
@@ -208,159 +213,121 @@ public function show($id)
 
 
 
-   public function store(Request $request)
-{
-    try {
-        // پیام‌های فارسی برای اعتبارسنجی
-        $messages = [
-            'name.required' => 'وارد کردن نام شرکت الزامی است.',
-            'email.required' => 'وارد کردن ایمیل الزامی است.',
-            'email.email' => 'فرمت ایمیل معتبر نیست.',
-            'email.unique' => 'این ایمیل قبلاً ثبت شده است.',
-            'password.required' => 'وارد کردن رمز عبور الزامی است.',
-            'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
-            'logo.image' => 'فایل لوگو باید یک تصویر باشد.',
-            'logo.mimes' => 'لوگو باید یکی از فرمت‌های jpeg, png, jpg, gif باشد.',
-            'logo.max' => 'حجم لوگو نباید بیشتر از ۲ مگابایت باشد.',
-            'city.required' => 'وارد کردن نام شهر الزامی است.',
-            'country.required' => 'وارد کردن نام کشور الزامی است.',
-        ];
-
-        // اعتبارسنجی ورودی‌ها
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:companies',
-            'password' => 'required|string|min:6',
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'description' => 'nullable|string',
-            'industry' => 'nullable|string|max:255',
-            'website' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'city' => 'required|string|max:255',
-            'country' => 'required|string|max:255',
-        ], $messages);
-
-        // در صورت خطا در اعتبارسنجی
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'خطا در اعتبارسنجی اطلاعات',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $validated = $validator->validated();
-
-        // پیدا کردن یا ایجاد لوکیشن
-        $location = Location::findOrCreate($validated['city'], $validated['country']);
-
-        // رمزنگاری رمز عبور
-        $validated['password'] = bcrypt($validated['password']);
-
-        // افزودن location_id
-        $validated['location_id'] = $location->id;
-
-        // حذف city و country چون در جدول companies وجود ندارند
-        unset($validated['city'], $validated['country']);
-
-        // ذخیره فایل لوگو (در صورت وجود)
-        if ($request->hasFile('logo')) {
-            $path = $request->file('logo')->store('uploads', 'public');
-            $url = asset('storage/' . $path);
-            $validated['logo'] = $url;
-        }
-
-        // ساخت شرکت
-        $company = Company::create($validated);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'شرکت با موفقیت ایجاد شد.',
-            'data' => $company
-        ], 201);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'خطا در ایجاد شرکت',
-            'error' => $e->getMessage() // در محیط production می‌تونی اینو حذف کنی
-        ], 500);
-    }
-}
-
-
-
-    public function update(Request $request, $id)
+  public function store(Request $request)
     {
+        // ۱. (اصلاح‌شده) ولیدیشن بر اساس مدل داده جدید (بدون ایمیل و پسورد برای شرکت)
+        $validated = $request->validate([
+            'name'        => 'required|string|max:255|unique:companies,name',
+            'logo'        => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'description' => 'nullable|string',
+            'industry'    => 'nullable|string|max:255',
+            'website'     => 'nullable|url|max:255',
+            'phone'       => 'nullable|string|max:20',
+            'city'        => 'required|string|max:255',
+            'country'     => 'required|string|max:255',
+        ]);
+
+        $user = $request->user();
+
         try {
-            $validator = Validator::make($request->all(), [
-                'name' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|email|unique:companies,email,' . $id,
-                'city' => 'sometimes|required|string|max:255',
-                'country' => 'sometimes|required|string|max:255',
-                'logo' => 'nullable|string',
-                'description' => 'nullable|string',
-                'industry' => 'nullable|string|max:255',
-                'website' => 'nullable|url|max:255',
-                'phone' => 'nullable|string|max:20'
+            // جدا کردن اطلاعات موقعیت مکانی
+            $locationData = [
+                'city' => $validated['city'],
+                'country' => $validated['country']
+            ];
+            // حذف city و country از آرایه اصلی
+            unset($validated['city'], $validated['country']);
+
+            // پیدا کردن یا ایجاد لوکیشن
+            $location = Location::firstOrCreate($locationData);
+            $validated['location_id'] = $location->id;
+
+            // ذخیره فایل لوگو
+            if ($request->hasFile('logo')) {
+                // بهتر است مسیر فایل را ذخیره کنید نه URL کامل
+                $path = $request->file('logo')->store('logos', 'public');
+                $validated['logo'] = $path;
+            }
+
+            // ساخت شرکت
+            $company = Company::create($validated);
+
+            // ۲. (مهم) اتصال کاربر ایجاد کننده به شرکت با نقش 'admin'
+            $company->users()->attach($user->id, [
+                'role'            => 'admin',
+                'job_title'       => 'بنیان‌گذار', // یا هر عنوان پیش‌فرض دیگر
+                'start_date'      => now(),
+                'employment_type' => 'تمام وقت',
             ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'شرکت با موفقیت ایجاد شد.',
+                'company' => $company->fresh()->load('location') // لود کردن روابط برای پاسخ کامل
+            ], 201);
 
-            $validated = $validator->validated();
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'خطا در ایجاد شرکت', 'error' => $e->getMessage()], 500);
+        }
+    }
 
-            // پیدا کردن شرکت
-            $company = Company::findOrFail($id);
+    /**
+     * به‌روزرسانی اطلاعات یک شرکت موجود.
+     */
+    public function update(Request $request, Company $company) // ۳. استفاده از Route Model Binding
+    {
+        // ۴. (مهم) بررسی مجوز دسترسی
+        $this->authorize('update', $company);
 
-            // اگر city و country ارسال شده بود، موقعیت را پیدا یا ایجاد کن
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('companies')->ignore($company->id)],
+            'city'        => 'sometimes|required|string|max:255',
+            'country'     => 'sometimes|required|string|max:255',
+            'logo'        => 'nullable|string', // فرض می‌شود در آپدیت فقط آدرس ارسال می‌شود
+            'description' => 'nullable|string',
+            'industry'    => 'nullable|string|max:255',
+            'website'     => 'nullable|url|max:255',
+            'phone'       => 'nullable|string|max:20'
+        ]);
+
+        try {
             if (isset($validated['city']) && isset($validated['country'])) {
-                $location = Location::findOrCreate($validated['city'], $validated['country']);
+                $location = Location::firstOrCreate([
+                    'city' => $validated['city'],
+                    'country' => $validated['country']
+                ]);
                 $validated['location_id'] = $location->id;
-                unset($validated['city'], $validated['country']); // حذف از آرایه برای جلوگیری از ارور
+                unset($validated['city'], $validated['country']);
             }
 
-            // به‌روزرسانی شرکت
             $company->update($validated);
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Company updated successfully',
-                'data' => $company->load('location') // با لوکیشن
+                'message' => 'اطلاعات شرکت با موفقیت ویرایش شد.',
+                'company' => $company->load('location')
             ]);
-
         } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to update company',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'خطا در ویرایش شرکت', 'error' => $e->getMessage()], 500);
         }
     }
 
-    public function destroy($id)
+    /**
+     * حذف یک شرکت.
+     */
+    public function destroy(Company $company) // ۳. استفاده از Route Model Binding
     {
-        try {
-            $company = Company::findOrFail($id);
-            $company->delete();
+        // ۴. (مهم) بررسی مجوز دسترسی
+        $this->authorize('delete', $company);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'شرکت با موفقیت حذف شد'
-            ]);
+        // قبل از حذف شرکت، بهتر است تمام روابط آن در جدول واسط را حذف کنید
+        $company->users()->detach();
+        $company->delete();
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to delete company',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json(['status' => 'success', 'message' => 'شرکت با موفقیت حذف شد.']);
     }
+
+
+
 }
 
