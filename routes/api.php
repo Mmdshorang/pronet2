@@ -23,6 +23,7 @@ Route::post('/register', [App\Http\Controllers\Auth\AuthController::class, 'regi
 
 
 Route::post('/search', [UserController::class, 'searchUsersAndCompanies']);
+
 // 👥 کاربران
 Route::post('/getusers', [UserController::class, 'index']); // لیست کاربران
 Route::post('/get-companies', [CompanyController::class, 'index']); // لیست شرکت‌ها
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/upload-profile-photo', [UserController::class, 'upload']);
 // حذف سابقه شغلی خاص از پروفایل کاربر
     Route::post('/work-history', [UserController::class, 'addWorkHistory']);
+
 
     // ویرایش سابقه شغلی
     Route::put('/work-history/{companyId}', [UserController::class, 'updateWorkHistory']);

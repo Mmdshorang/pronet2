@@ -151,73 +151,74 @@ private function transformUserToProfile($user)
 }
 
 
-    public function searchUsersAndCompanies(Request $request)
-    {
-        $query = $request->input('q');
-        $page = (int) $request->input('page', 1);
-        $limit = 6;
-        $offset = ($page - 1) * $limit;
+public function searchUsersAndCompanies(Request $request)
+{
+    $query = $request->input('q');
+    $page = (int) $request->input('page', 1);
+    $limit = 6;
+    $offset = ($page - 1) * $limit;
 
-        if (!$query || trim($query) === '') {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Query parameter "q" is required.'
-            ], 400);
-        }
-
-        // تعداد کل آیتم‌هایی که باید برگردونیم (نصف برای هر نوع)
-        $halfLimit = (int) ceil($limit / 2);
-
-        // گرفتن کاربران
-        $usersQuery = User::where('name', 'like', "%{$query}%")
-            ->orWhere('email', 'like', "%{$query}%");
-
-        $usersCount = $usersQuery->count();
-        $users = $usersQuery->select('id', 'name', 'email', 'profile_photo')
-            ->skip($offset)
-            ->take($halfLimit)
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'photo' => $user->profile_photo,
-                    'type' => 'user',
-                ];
-            });
-
-        // گرفتن شرکت‌ها
-        $companiesQuery = Company::where('name', 'like', "%{$query}%")
-            ->orWhere('email', 'like', "%{$query}%");
-
-        $companiesCount = $companiesQuery->count();
-        $companies = $companiesQuery->select('id', 'name', 'email', 'logo')
-            ->skip($offset)
-            ->take($halfLimit)
-            ->get()
-            ->map(function ($company) {
-                return [
-                    'id' => $company->id,
-                    'name' => $company->name,
-                    'email' => $company->email,
-                    'photo' => $company->logo,
-                    'type' => 'company',
-                ];
-            });
-
-        $results = $users->merge($companies)->values();
-
-        $hasMore = ($usersCount > $offset + $halfLimit) || ($companiesCount > $offset + $halfLimit);
-
+    if (!$query || trim($query) === '') {
         return response()->json([
-            'status' => 'success',
-            'message' => 'Search results retrieved successfully.',
-            'data' => $results,
-            'hasMore' => $hasMore,
-            'currentPage' => $page
-        ]);
+            'status' => 'error',
+            'message' => 'Query parameter "q" is required.'
+        ], 400);
     }
+
+    $halfLimit = (int) ceil($limit / 2);
+
+    // گرفتن کاربران
+    $usersQuery = User::where('name', 'like', "%{$query}%")
+        ->orWhere('email', 'like', "%{$query}%");
+
+    $usersCount = $usersQuery->count();
+    $users = $usersQuery->select('id', 'name', 'email', 'profile_photo')
+        ->skip($offset)
+        ->take($halfLimit)
+        ->get()
+        ->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'photo' => $user->profile_photo,
+                'type' => 'user',
+            ];
+        });
+
+    // گرفتن شرکت‌ها
+    $companiesQuery = Company::where('name', 'like', "%{$query}%")
+        ->orWhere('email', 'like', "%{$query}%");
+
+    $companiesCount = $companiesQuery->count();
+    $companies = $companiesQuery->select('id', 'name', 'email', 'logo')
+        ->skip($offset)
+        ->take($halfLimit)
+        ->get()
+        ->map(function ($company) {
+            return [
+                'id' => $company->id,
+                'name' => $company->name,
+                'email' => $company->email,
+                'photo' => $company->logo,
+                'type' => 'company',
+            ];
+        });
+
+    // رفع مشکل: تبدیل آرایه‌ها به Collection
+    $results = collect($users)->merge($companies)->values();
+
+    $hasMore = ($usersCount > $offset + $halfLimit) || ($companiesCount > $offset + $halfLimit);
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Search results retrieved successfully.',
+        'data' => $results,
+        'hasMore' => $hasMore,
+        'currentPage' => $page
+    ]);
+}
+
 
 
   public function show($id)
@@ -305,6 +306,8 @@ private function transformUserToProfile($user)
         ], 500);
     }
 }
+
+
 
 
     public function profile(Request $request)

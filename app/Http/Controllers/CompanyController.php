@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Validation\Rule;
 
 class CompanyController extends Controller
 {
