@@ -52,6 +52,7 @@ Route::post('/upload-profile-photo', [UserController::class, 'upload']);
 // حذف سابقه شغلی خاص از پروفایل کاربر
     Route::post('/work-history', [UserController::class, 'addWorkHistory']);
 
+Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
 
     // ویرایش سابقه شغلی
     Route::put('/work-history/{companyId}', [UserController::class, 'updateWorkHistory']);

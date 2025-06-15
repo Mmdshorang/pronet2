@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Validation\Rule;
-
+use Illuminate\Support\Facades\Storage;
 class CompanyController extends Controller
 {
 public function index(Request $request)
@@ -162,6 +162,12 @@ public function show(Company $company)
                     'industry' => $company->industry,
                     'logo' => $company->logo,
                     'location' => optional($company->location)->city,
+                    'city' => optional($company->location)->city,
+
+                    'country' => optional($company->location)->country,
+                    'website' => $company->website,
+                    'phone' => $company->phone,
+
                     'ratings' => $transformedRatings,
                 ],
                 'average_rating' => $averageRating,
@@ -312,10 +318,48 @@ public function show(Company $company)
             return response()->json(['status' => 'error', 'message' => 'خطا در ویرایش شرکت', 'error' => $e->getMessage()], 500);
         }
     }
+    public function uploadLogo(Request $request)
+    {
+        // ۱. اعتبارسنجی فایل ورودی
+        $request->validate([
+            'logo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
 
-    /**
-     * حذف یک شرکت.
-     */
+        // ۲. دریافت کاربر احراز هویت شده
+        $user = Auth::user();
+
+
+        $company = $user->companies()->first(); // این فرض می‌کند که مدل User یک رابطه به نام companies دارد
+
+        if (!$company) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No company found associated with this user.',
+            ], 404);
+        }
+
+        // ۴. اگر لوگوی قبلی وجود داشت، آن را حذف کن
+        if ($company->logo && Storage::disk('public')->exists($company->logo)) {
+            Storage::disk('public')->delete($company->logo);
+        }
+
+        // ۵. ذخیره فایل جدید در پوشه public/logos
+        $path = $request->file('logo')->store('logos', 'public');
+
+        // ۶. ذخیره مسیر جدید در دیتابیس برای شرکت مربوطه
+        $company->logo = $path;
+        $company->save();
+
+        // ۷. تولید لینک عمومی برای استفاده در فرانت‌اند
+        $url = asset('storage/' . $path);
+
+        // ۸. بازگرداندن پاسخ موفقیت‌آمیز
+        return response()->json([
+            'status' => 'success',
+            'profile_photo_url' => $company->logo, // نام فیلد برای وضوح بیشتر تغییر کرد
+            'message' => 'Company logo uploaded and saved successfully.',
+        ]);
+    }
     public function destroy(Company $company) // ۳. استفاده از Route Model Binding
     {
         // ۴. (مهم) بررسی مجوز دسترسی
