@@ -41,18 +41,17 @@ Route::post('/companies/{company}', [CompanyController::class, 'show']); // مش
 Route::post('/locations', [LocationController::class, 'index']); // لیست لوکیشن‌ها
 
 // 🔒 روت‌های خصوصی (نیاز به لاگین)
+
 Route::middleware('auth:sanctum')->group(function () {
     // 👤 پروفایل کاربر
     Route::post('/profile', [UserController::class, 'profile']);
     Route::post('/user/update', [UserController::class, 'update']); // ویرایش پروفایل
     Route::post('/user/password', [UserController::class, 'changePassword']); // تغییر رمز عبور
     Route::post('/logout', [App\Http\Controllers\Auth\AuthController::class, 'logout']); // خروج
-// افزودن سابقه شغلی جدید به پروفایل کاربر
-Route::post('/upload-profile-photo', [UserController::class, 'upload']);
-// حذف سابقه شغلی خاص از پروفایل کاربر
+    Route::post('/upload-profile-photo', [UserController::class, 'upload']);
     Route::post('/work-history', [UserController::class, 'addWorkHistory']);
 
-Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
+    Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
 
     // ویرایش سابقه شغلی
     Route::put('/work-history/{companyId}', [UserController::class, 'updateWorkHistory']);
@@ -72,13 +71,8 @@ Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
     // 🏆 دستاوردها
     Route::post('/achievements', [AchievementController::class, 'store']); // افزودن دستاورد
     Route::post('/achievements/{id}', [AchievementController::class, 'destroy']); // حذف دستاورد
-
-    // ⭐ امتیازدهی
-   // Route::post('/user-ratings', [UserRatingController::class, 'store']); // امتیاز به کاربران
-    //Route::post('/company-ratings', [CompanyRatingController::class, 'store']); // امتیاز به شرکت‌ها
-     Route::post('/ratings', [RatingController::class, 'store']);
-     Route::post('/companies/{company}/users', [CompanyUserController::class, 'addUser']);
+    Route::post('/ratings', [RatingController::class, 'store']);
+    Route::post('/companies/{company}/users', [CompanyUserController::class, 'addUser']);
     Route::post('/companies/{company}/users/{user}', [CompanyUserController::class, 'removeUser']);
-    // 🏙️ مدیریت لوکیشن‌ها
-  //  Route::post('/locations', [LocationController::class, 'store']); // افزودن لوکیشن
+
 });

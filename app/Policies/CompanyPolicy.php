@@ -39,17 +39,33 @@ class CompanyPolicy
      public function update(User $user, Company $company)
     {
         // چک می‌کند آیا کاربر عضو شرکت است و نقش 'admin' را در آن شرکت دارد یا خیر
-        return $user->companies()
-                    ->where('company_id', $company->id)
-                    ->wherePivot('role', 'admin')
-                    ->exists();
-    }
+        // return $user->companies()
+        //             ->where('company_id', $company->id)
+        //             ->wherePivot('role', 'admin')
+        //             ->exists();
+         if ($user->role === 'admin') {
+           return true;
+         }
 
+        return false;
+    }
+    public function addWorkHistory(User $user, Company $company): bool
+    {
+        // یک dd() برای تست اینجا قرار می‌دهیم
+        // dd('Policy method reached');
+
+        // این منطق چک می‌کند که آیا رکوردی برای این کاربر و این شرکت
+        // در جدول واسط (company_user) وجود دارد یا خیر.
+        return $user->companies()->where('company_id', $company->id)->exists();
+    }
     /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Company $company): bool
-    {
+    {   if ($user->role === 'admin') {
+        return true;
+    }
+
         return false;
     }
 

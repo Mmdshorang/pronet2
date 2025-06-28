@@ -13,10 +13,8 @@ use Illuminate\Support\Facades\Auth;
 
 class RatingController extends Controller
 {
-  public function store(Request $request)
+public function store(Request $request)
 {
-
-
     $validated = $request->validate([
         'rateable_type' => 'required|string|in:user,company',
         'rateable_id' => 'required|integer',
@@ -24,14 +22,28 @@ class RatingController extends Controller
         'criteriaValues.*.criterionId' => 'required|string|exists:rating_criteria,name',
         'criteriaValues.*.score' => 'required|integer|min:1|max:5',
         'comment' => 'nullable|string|max:1000',
+    ], [
+        'rateable_type.required' => 'نوع امتیازدهی الزامی است.',
+        'rateable_type.in' => 'نوع امتیازدهی باید user یا company باشد.',
+        'rateable_id.required' => 'شناسه هدف الزامی است.',
+        'rateable_id.integer' => 'شناسه باید عدد باشد.',
+        'criteriaValues.required' => 'مقادیر معیارها الزامی است.',
+        'criteriaValues.array' => 'مقادیر معیار باید آرایه باشد.',
+        'criteriaValues.min' => 'حداقل یک معیار باید انتخاب شود.',
+        'criteriaValues.*.criterionId.required' => 'شناسه معیار الزامی است.',
+        'criteriaValues.*.criterionId.exists' => 'معیار انتخاب‌شده نامعتبر است.',
+        'criteriaValues.*.score.required' => 'امتیاز هر معیار الزامی است.',
+        'criteriaValues.*.score.integer' => 'امتیاز باید عدد صحیح باشد.',
+        'criteriaValues.*.score.min' => 'حداقل امتیاز مجاز ۱ است.',
+        'criteriaValues.*.score.max' => 'حداکثر امتیاز مجاز ۵ است.',
+        'comment.string' => 'توضیحات باید به صورت متن باشد.',
+        'comment.max' => 'توضیحات نباید بیشتر از ۱۰۰۰ کاراکتر باشد.',
     ]);
 
     $user = Auth::user();
-  
     $rateableType = $validated['rateable_type'] === 'user' ? User::class : Company::class;
     $rateableId = $validated['rateable_id'];
 
-    // 👮‍♂️ بررسی مجوز: فقط همکارها یا کارکنان
     if ($rateableType === User::class) {
         $targetUser = User::findOrFail($rateableId);
 
@@ -44,11 +56,10 @@ class RatingController extends Controller
         if ($commonCompanies->isEmpty()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'You can only rate users you have worked with.'
+                'message' => 'شما فقط می‌توانید به کاربرانی امتیاز بدهید که با آن‌ها همکاری داشته‌اید.'
             ], 403);
         }
     } else {
-        // امتیاز به شرکت
         $hasWorked = UserCompany::where('user_id', $user->id)
             ->where('company_id', $rateableId)
             ->exists();
@@ -56,16 +67,14 @@ class RatingController extends Controller
         if (!$hasWorked) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'You can only rate companies you have worked at.'
+                'message' => 'شما فقط می‌توانید به شرکت‌هایی امتیاز بدهید که در آن‌ها فعالیت داشته‌اید.'
             ], 403);
         }
     }
 
-    // محاسبه میانگین امتیاز کلی
     $scores = collect($validated['criteriaValues'])->pluck('score');
     $average = round($scores->avg(), 2);
 
-    // ذخیره رکورد اصلی
     $rating = Rating::create([
         'reviewer_id' => $user->id,
         'rater_name' => $user->name,
@@ -75,7 +84,6 @@ class RatingController extends Controller
         'comment' => $validated['comment'] ?? null,
     ]);
 
-    // ذخیره تک‌تک مقادیر معیارها
     foreach ($validated['criteriaValues'] as $item) {
         $criterion = RatingCriterion::where('name', $item['criterionId'])->first();
         RatingValue::create([
@@ -87,11 +95,12 @@ class RatingController extends Controller
 
     return response()->json([
         'status' => 'success',
-        'message' => 'Rating submitted successfully',
+        'message' => 'امتیازدهی با موفقیت ثبت شد.',
         'data' => [
             'rating_id' => $rating->id,
             'average_score' => $average,
         ]
     ]);
 }
+
 }

@@ -244,7 +244,7 @@ public function searchUsersAndCompanies(Request $request)
             'job_title' => $user->job_title,
             'linkedin_url' => $user->linkedin_url,
             'github_url' => $user->github_url,
-            'profile_photo_url' => $user->profile_photo_url,
+            'profile_photo_url' => $user->profile_photo,
             'location' => [
                 'city' => $user->location->city??'',
                 'country' => $user->location->country??'',
@@ -284,7 +284,7 @@ public function searchUsersAndCompanies(Request $request)
                     'id' => $rating->id,
                     'reviewer_id' => $rating->reviewer_id,
                     'reviewer_name' => $rating->reviewer->name,
-                    'reviewer_avatarUrl' => $rating->reviewer->profile_photo_url,
+                    'reviewer_avatarUrl' => $rating->reviewer->profile_photo,
                     'overall_rating' => $rating->overall_rating,
                     'comment' => $rating->comment,
                     'created_at' => $rating->created_at,
@@ -342,66 +342,101 @@ public function searchUsersAndCompanies(Request $request)
     /**
      * افزودن یک سابقه شغلی جدید.
      */
-    public function addWorkHistory(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'id'                  => 'nullable|integer|exists:companies,id',
-            'name'                => 'required_without:id|string|max:255',
-            'website'             => 'nullable|url',
-            'pivot.job_title'       => 'required|string|max:255',
-            'pivot.start_date'      => 'required|date',
-            'pivot.end_date'        => 'nullable|date|after_or_equal:pivot.start_date',
-            'pivot.description'     => 'nullable|string',
-            'pivot.employment_type' => ['nullable', Rule::in(['تمام وقت', 'پاره وقت', 'قراردادی', 'کارآموزی', 'فریلنسری'])],
-            'pivot.role'            => ['nullable', Rule::in(['admin', 'member'])], // ۱. اضافه شدن 'role' به ولیدیشن
+  public function addWorkHistory(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'id'                    => 'nullable|integer|exists:companies,id',
+        'name'                  => 'required_without:id|string|max:255',
+        'website'               => 'nullable|url',
+        'pivot.job_title'       => 'required|string|max:255',
+        'pivot.start_date'      => 'required|date',
+        'pivot.end_date'        => 'nullable|date|after_or_equal:pivot.start_date',
+        'pivot.description'     => 'nullable|string',
+        'pivot.employment_type' => ['nullable', Rule::in(['تمام وقت', 'پاره وقت', 'قراردادی', 'کارآموزی', 'فریلنسری'])],
+        'pivot.role'            => ['nullable', Rule::in(['admin', 'member'])],
+    ], [
+        // پیام‌های اعتبارسنجی سفارشی به فارسی:
+        'id.exists'                     => 'شرکت انتخاب شده وجود ندارد.',
+        'name.required_without'        => 'نام شرکت را وارد کنید.',
+        'pivot.job_title.required'     => 'عنوان شغلی الزامی است.',
+        'pivot.start_date.required'    => 'تاریخ شروع الزامی است.',
+        'pivot.start_date.date'        => 'فرمت تاریخ شروع معتبر نیست.',
+        'pivot.end_date.date'          => 'فرمت تاریخ پایان معتبر نیست.',
+        'pivot.end_date.after_or_equal'=> 'تاریخ پایان باید بعد از تاریخ شروع باشد.',
+        'pivot.employment_type.in'     => 'نوع همکاری انتخاب شده معتبر نیست.',
+        'pivot.role.in'                => 'نقش وارد شده معتبر نیست.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'برخی از فیلدها به درستی وارد نشده‌اند.',
+            'errors'  => $validator->errors(),
+        ], 422);
+    }
+
+    $user = $request->user();
+    $data = $validator->validated();
+    $pivotData = $data['pivot'];
+
+    try {
+        $company = null;
+
+        if (!empty($data['id'])) {
+            $company = Company::find($data['id']);
+
+            // 🔒 بررسی اینکه آیا کاربر خودش در این شرکت کار می‌کند (مثلاً به عنوان مدیر یا عضو)
+            $isEmployee = $company->users()->where('user_id', $user->id)->exists();
+
+            if (!$isEmployee) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'شما نمی‌توانید برای شرکتی که در آن عضو نیستید سابقه شغلی اضافه کنید.'
+                ], 403);
+            }
+
+        } else {
+            $company = Company::firstOrCreate(
+                ['name' => $data['name']],
+                ['website' => $data['website'] ?? null]
+            );
+        }
+
+        // بررسی تکراری نبودن سابقه برای همان شرکت
+        $isDuplicate = $user->companies()->where('company_id', $company->id)->exists();
+        if ($isDuplicate) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'این سابقه شغلی قبلاً ثبت شده است.'
+            ], 409);
+        }
+
+        $user->companies()->attach($company->id, [
+            'job_title'       => $pivotData['job_title'],
+            'start_date'      => $pivotData['start_date'],
+            'end_date'        => $pivotData['end_date'] ?? null,
+            'description'     => $pivotData['description'] ?? null,
+            'employment_type' => $pivotData['employment_type'] ?? 'تمام وقت',
+            'role'            => $pivotData['role'] ?? 'member',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
-        }
+        $newWorkHistory = $user->companies()->where('company_id', $company->id)->first();
 
-        $user = $request->user();
-        $data = $validator->validated();
-        $pivotData = $data['pivot'];
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'سابقه شغلی با موفقیت اضافه شد.',
+            'company' => $newWorkHistory
+        ], 201);
 
-        try {
-            $company = null;
-            if (!empty($data['id'])) {
-                $company = Company::find($data['id']);
-            } else {
-                $company = Company::firstOrCreate(
-                    ['name' => $data['name']],
-                    ['website' => $data['website'] ?? null]
-                );
-            }
-
-            $isDuplicate = $user->companies()->where('company_id', $company->id)->exists();
-            if ($isDuplicate) {
-                return response()->json(['status' => 'error', 'message' => 'این سابقه شغلی قبلاً ثبت شده است.'], 409);
-            }
-
-            $user->companies()->attach($company->id, [
-                'job_title'       => $pivotData['job_title'],
-                'start_date'      => $pivotData['start_date'],
-                'end_date'        => $pivotData['end_date'] ?? null,
-                'description'     => $pivotData['description'] ?? null,
-                'employment_type' => $pivotData['employment_type'] ?? 'تمام وقت',
-                'role'            => $pivotData['role'] ?? 'member', // ۲. اضافه شدن 'role' به داده‌های pivot با مقدار پیش‌فرض
-            ]);
-
-            // ۳. روش بهتر و مطمئن‌تر برای بازخوانی رکورد جدید
-            $newWorkHistory = $user->companies()->where('company_id', $company->id)->first();
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'سابقه شغلی با موفقیت اضافه شد.',
-                'company' => $newWorkHistory
-            ], 201);
-
-        } catch (\Exception $e) {
-            return response()->json(['status' => 'error', 'message' => 'خطا در سرور', 'error' => $e->getMessage()], 500);
-        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'خطایی در سرور رخ داده است.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 
     /**
      * ویرایش یک سابقه شغلی موجود.
