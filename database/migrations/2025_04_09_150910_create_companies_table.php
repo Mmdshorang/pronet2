@@ -12,7 +12,6 @@ class CreateCompaniesTable extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
-            $table->string('password');
             $table->unsignedBigInteger('location_id')->nullable();
             $table->string('logo')->nullable();
             $table->text('description')->nullable();
@@ -20,7 +19,7 @@ class CreateCompaniesTable extends Migration
             $table->string('website')->nullable();
             $table->string('phone')->nullable();
             $table->timestamps();
-            
+
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('set null');
         });

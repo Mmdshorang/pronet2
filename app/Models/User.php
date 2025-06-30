@@ -69,16 +69,6 @@ class User extends Authenticatable
             ->withTimestamps(); // برای مدیریت created_at و updated_at در جدول واسط
     }
 
-    /*
-     * تابع companyRelations() حذف شد.
-     * این تابع افزونه بود و برای جلوگیری از سردرگمی حذف گردید.
-     * از تابع companies() به عنوان روش اصلی استفاده کنید.
-    */
-
-    /**
-     * بررسی می‌کند آیا کاربر ادمین یک شرکت خاص است یا خیر.
-     * این تابع بر اساس ستون 'role' در جدول واسط کار می‌کند.
-     */
     public function isCompanyAdmin($companyId): bool
     {
         // ابتدا بررسی می‌کنیم که آیا اصلاً رابطه‌ای با این شرکت وجود دارد یا نه

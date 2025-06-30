@@ -13,6 +13,7 @@ use App\Http\Controllers\{
     UserRatingController,
     CompanyRatingController,
     LocationController,
+    CompanyAdminController,
 RatingController,
 };
 
@@ -52,7 +53,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/work-history', [UserController::class, 'addWorkHistory']);
 
     Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
-
+    //add admin in company
+    Route::post('/companies/{company}/admins', [CompanyAdminController::class, 'store']);
     // ویرایش سابقه شغلی
     Route::put('/work-history/{companyId}', [UserController::class, 'updateWorkHistory']);
 
